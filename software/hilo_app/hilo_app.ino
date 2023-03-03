@@ -16,15 +16,25 @@
 #define PIN_SPINDLE_DIR       48  // Spindle Motor Direction Pin
 #define PIN_SPINDLE_ENABLE    62  // Spindle Motor Enable Pin
 
-#define PIN_ELEVATOR_A_STEP   26  // Elevator Motors Step Pin
-#define PIN_ELEVATOR_A_DIR    28  // Elevator Motors Direction Pin
-#define PIN_ELEVATOR_A_ENABLE 24  // Elevator Motors Enable Pin
+#define PIN_ELEVATOR_A_STEP   36  // Elevator Motors Step Pin
+#define PIN_ELEVATOR_A_DIR    34  // Elevator Motors Direction Pin
+#define PIN_ELEVATOR_A_ENABLE 30  // Elevator Motors Enable Pin
+
+#define PIN_END_STOP_X_MIN     3  // X Min End Stop Pin
+#define PIN_END_STOP_X_MAX     2  // X Max End Stop Pin
 
 int DRAFTING_SPEED_PERCENTAGE = 40;
 int DELIVERY_SPEED            = 150;
 int SPINDLE_SPEED             = 700;
-int ELEVATOR_SPEED            =  0;
+int ELEVATOR_SPEED            = 100;
 char SPINDLE_DIRECTION = 'Z';
+
+// The end stop should not be triggered very frequently.
+const long END_STOP_TRIGGER_INTERVAL = 5000; 
+// Marked volatile as these are modified from an interrupt method.
+volatile int ELEVATOR_DIRECTION = -1;
+volatile bool END_STOP_TRIGGERED = false;
+volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
 
 float ACCELERATION = 500.00f;
 
@@ -33,18 +43,18 @@ long START_COUNTER = 0;
 
 AccelStepper motorDrafting(AccelStepper::DRIVER, PIN_DRAFTING_STEP, PIN_DRAFTING_DIR);
 AccelStepper motorDelivery(AccelStepper::DRIVER, PIN_DELIVERY_STEP, PIN_DELIVERY_DIR);
-AccelStepper motorElevatorA(AccelStepper::DRIVER, PIN_ELEVATOR_A_STEP, PIN_ELEVATOR_A_DIR);
-AccelStepper motorSpindle  (AccelStepper::DRIVER, PIN_SPINDLE_STEP,    PIN_SPINDLE_DIR);
+AccelStepper motorElevator(AccelStepper::DRIVER, PIN_ELEVATOR_A_STEP, PIN_ELEVATOR_A_DIR);
+AccelStepper motorSpindle(AccelStepper::DRIVER, PIN_SPINDLE_STEP,    PIN_SPINDLE_DIR);
 
 void setup() {
   Serial.begin(HILO_SERIAL_BAUDRATE);
 
   // Setup ScreenController
   setupScreenController();
+  setupEndStops();
   
   Serial.println("Starting HILO Machine");
   
-  // put your setup code here, to run once:
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
   
@@ -58,7 +68,6 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   serialCommunicationLoop();
   screenControllerLoop();
   runMachineLoop();
@@ -92,6 +101,11 @@ void serialCommunicationLoop() {
       Serial.print("Drafting percentage set to: ");
       Serial.println(DRAFTING_SPEED_PERCENTAGE);
     }
+    if (data.startsWith("e")) {
+      ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
+      Serial.print("Elevator direction set to: ");
+      Serial.println(ELEVATOR_DIRECTION);
+    }
   }
 }
 
@@ -114,38 +128,37 @@ void stopMachine() {
   motorDelivery.setCurrentPosition(0);
   motorSpindle.stop();
   motorSpindle.setCurrentPosition(0);
+  motorElevator.stop();
+  motorElevator.setCurrentPosition(0);
   setSteppersEnabled(false);
 }
 
 void startMachine() {
   Serial.println("Starting machine");
-  
-  int draftingSpeed = (int)map(DRAFTING_SPEED_PERCENTAGE, 0, 100, 0, DELIVERY_SPEED);
-  motorDrafting.setMaxSpeed(draftingSpeed);
-  motorDrafting.setAcceleration(ACCELERATION);
-  Serial.print("Drafting percentage: ");
-  Serial.println(DRAFTING_SPEED_PERCENTAGE);
-  Serial.print("Drafting speed: ");
-  Serial.println(draftingSpeed);
 
-
+  // DELIVERY
   motorDelivery.setMaxSpeed(DELIVERY_SPEED);
   motorDelivery.setAcceleration(ACCELERATION);
-  Serial.print("Delivery speed: ");
-  Serial.println(DELIVERY_SPEED);
-
-  // Don't move the elevator for now
-  
-  motorSpindle.setMaxSpeed(SPINDLE_SPEED);
-  motorSpindle.setAcceleration(ACCELERATION);
-  Serial.print("Spindle speed: ");
-  Serial.println(SPINDLE_SPEED);
-
-  motorDrafting.move(-1000000);
   motorDelivery.move(-1000000);
 
+  // DRAFTING
+  int draftingSpeed = (int)map(DRAFTING_SPEED_PERCENTAGE, 0, 100, 0, DELIVERY_SPEED);
+  motorDrafting.setMaxSpeed(draftingSpeed);
+  motorDrafting.setAcceleration(ACCELERATION);\
+  motorDrafting.move(-1000000);
+
+  // SPINDLE  
+  motorSpindle.setMaxSpeed(SPINDLE_SPEED);
+  motorSpindle.setAcceleration(ACCELERATION);
   int spindleDirection = (SPINDLE_DIRECTION == 'Z') ? 1 : -1;
   motorSpindle.move(1000000 * spindleDirection);
+
+  // ELEVATOR
+  motorElevator.setMaxSpeed(ELEVATOR_SPEED);
+  motorElevator.setAcceleration(ACCELERATION);
+  setElevatorMove();
+
+  printMachineSettings(draftingSpeed);
   
   IS_RUNNING = true;
   setSteppersEnabled(true);
@@ -154,12 +167,17 @@ void startMachine() {
 void runMachineLoop() {
   if (IS_RUNNING) {
       motorSpindle.run();
+      motorElevator.run();
       if (START_COUNTER > 10000) { 
         // Build in a delay in starting the delivery, to allow for some twist build up.
         motorDelivery.run();
         motorDrafting.run();
       } else {
         START_COUNTER = START_COUNTER + 1;
+      }
+      if (END_STOP_TRIGGERED) {
+        END_STOP_TRIGGERED = false;
+        setElevatorMove();
       }
   }
 }
@@ -205,4 +223,39 @@ char toggleSpindleDirection() {
     SPINDLE_DIRECTION = 'S';
   }
   return SPINDLE_DIRECTION;
+}
+
+void setupEndStops() {
+  pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
+  pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
+}
+
+void endStopTrigger() {
+  const unsigned long currentMillis = millis();
+  if (currentMillis > (END_STOP_TRIGGER_MILLIS_LAST + END_STOP_TRIGGER_INTERVAL)) {
+    ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION; 
+    END_STOP_TRIGGERED = true;
+    END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
+  }
+}
+
+void setElevatorMove() {
+  Serial.println("Reversing elevator direction");
+  motorElevator.setCurrentPosition(0);
+  motorElevator.move(1000000 * ELEVATOR_DIRECTION);
+}
+
+void printMachineSettings(int draftingSpeed) {
+  Serial.print("Drafting percentage: ");
+  Serial.println(DRAFTING_SPEED_PERCENTAGE);
+  Serial.print("Drafting speed: ");
+  Serial.println(draftingSpeed); 
+  Serial.print("Delivery speed: ");
+  Serial.println(DELIVERY_SPEED);
+  Serial.print("Spindle speed: ");
+  Serial.println(SPINDLE_SPEED);
+  Serial.print("Elevator direction:");
+  Serial.println(ELEVATOR_DIRECTION);
 }
