@@ -32,7 +32,7 @@ int DELIVERY_SPEED            = 150;
 int SPINDLE_SPEED             = 700;
 int ELEVATOR_SPEED            = 100;
 int FLYER_SPEED               = 100;
-char SPINDLE_DIRECTION = 'Z';
+char SPINDLE_DIRECTION = 'S';
 
 // The end stop should not be triggered very frequently.
 const long END_STOP_TRIGGER_INTERVAL = 5000; 
@@ -49,9 +49,9 @@ bool IS_RUNNING = false;
 // TODO Add this option to the screen controller.
 bool ENABLE_FLYER = false;
 // When spinning it's useful to delay the drafting start to allow the twist to build up a bit. 
-// When using the flyer this is necessary and will break the roving.
+// When using the flyer this is unnecessary and will break the roving.
 int DRAFTING_START_DELAY = 10000;
-long START_COUNTER = ENABLE_FLYER ? DRAFTING_START_DELAY : 0;
+long START_COUNTER = ENABLE_FLYER ? 0 : DRAFTING_START_DELAY;
 
 AccelStepper motorDrafting(AccelStepper::DRIVER, PIN_DRAFTING_STEP, PIN_DRAFTING_DIR);
 AccelStepper motorDelivery(AccelStepper::DRIVER, PIN_DELIVERY_STEP, PIN_DELIVERY_DIR);
@@ -125,6 +125,11 @@ void serialCommunicationLoop() {
       ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
       Serial.print("Elevator direction set to: ");
       Serial.println(ELEVATOR_DIRECTION);
+    }
+    if (data.startsWith("t")) {
+      toggleSpindleDirection();
+      Serial.print("Twist direction set to: ");
+      Serial.println(SPINDLE_DIRECTION);
     }
   }
 }
