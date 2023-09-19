@@ -78,22 +78,22 @@ void serialCommunicationLoop() {
     }
     if (data.startsWith("m")) {
       int motor = data.substring(1,2).toInt();
-      int speed = data.substring(2).toInt();
+      int motorSpeed = data.substring(2).toInt();
       switch (motor) {
         case 1: 
-          MOTOR_1_STEPS = speed;
+          MOTOR_1_STEPS = motorSpeed;
           break;
         case 2: 
-          MOTOR_2_STEPS = speed;
+          MOTOR_2_STEPS = motorSpeed;
           break;
         case 3: 
-          MOTOR_3_STEPS = speed;
+          MOTOR_3_STEPS = motorSpeed;
           break;
         case 4: 
-          MOTOR_4_STEPS = speed;
+          MOTOR_4_STEPS = motorSpeed;
           break;
         case 5:
-          MOTOR_5_STEPS = speed;
+          MOTOR_5_STEPS = motorSpeed;
           break;
         default:
           Serial.print("Unrecognized motor number ");
@@ -102,7 +102,7 @@ void serialCommunicationLoop() {
       Serial.print("Set motor ");
       Serial.print(motor);
       Serial.print(" to ");
-      Serial.println(speed);
+      Serial.println(motorSpeed);
     }
   }
 }
@@ -139,16 +139,16 @@ void startMachine() {
   motor1.setMaxSpeed(MOTOR_1_STEPS);
   motor1.setAcceleration(ACCELERATION);
   motor1.move(-1000000);
-  motor2.setMaxSpeed(MOTOR_1_STEPS);
+  motor2.setMaxSpeed(MOTOR_2_STEPS);
   motor2.setAcceleration(ACCELERATION);
   motor2.move(-1000000);
-  motor3.setMaxSpeed(MOTOR_1_STEPS);
+  motor3.setMaxSpeed(MOTOR_3_STEPS);
   motor3.setAcceleration(ACCELERATION);
   motor3.move(-1000000);
-  motor4.setMaxSpeed(MOTOR_1_STEPS);
+  motor4.setMaxSpeed(MOTOR_4_STEPS);
   motor4.setAcceleration(ACCELERATION);
   motor4.move(-1000000);
-  motor5.setMaxSpeed(MOTOR_1_STEPS);
+  motor5.setMaxSpeed(MOTOR_5_STEPS);
   motor5.setAcceleration(ACCELERATION);
   motor5.move(-1000000);
 
