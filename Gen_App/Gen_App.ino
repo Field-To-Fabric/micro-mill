@@ -33,6 +33,7 @@ int MOTOR_3_STEPS = 100;
 int MOTOR_4_STEPS = 100;
 int MOTOR_5_STEPS = 100;
 int MOTOR_5_DIRECTION = 100;
+char SPINDLE_DIRECTION = 'Z';
 
 float ACCELERATION = 500.00f;
 
@@ -64,6 +65,7 @@ void setup() {
 
 void loop() {
   serialCommunicationLoop();
+  screenControllerLoop();
   runMachineLoop();
 }
 

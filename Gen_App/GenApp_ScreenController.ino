@@ -15,7 +15,7 @@
 #define BEEPER_PIN      37
 #define KILL_PIN        41
 
-int TEXT_HEIGHT = 12;                           //The height of text on the controller screen.
+int TEXT_HEIGHT = 8;                           //The height of text on the controller screen.
 int KILL_PIN_STATUS = 1;                        //Last read status of the stop pin, start at 1 to ensure buzzer is off              
 int ENCODER_0_PIN_A_LAST;                       //Used to decode rotory encoder, last value
 int ENCODER_0_PIN_A_NOW;                        //Used to decode rotory encoder, current value
@@ -191,7 +191,7 @@ void encoderTrigger() {
 }
 
 void drawHilo() {
-  u8g.setFont(u8g_font_helvR08);        // Set the font for the display
+  u8g.setFont(u8g_font_u8glib_4);        // Set the font for the display
   u8g.setDefaultForegroundColor();
   unsigned int h = u8g.getFontAscent()-u8g.getFontDescent();
   unsigned int w = u8g.getWidth();
@@ -202,7 +202,7 @@ void drawHilo() {
   
   int i;
   int s = 2;
-  for( i = 0; i < 4; i++ ) {
+  for( i = 0; i < 6; i++ ) {
     drawMenuLine(menuItems[i], i, s, h, w);
   }  
 }
