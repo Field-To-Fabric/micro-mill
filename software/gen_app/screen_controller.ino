@@ -106,7 +106,6 @@ void updateMenu() {
      } else {
       menuLinePos = abs(menuLinePos + ENCODER_CHANGE) % MENU_ITEMS_NUMBER;
      }
-     Serial.println("encoder change");
      ENCODER_CHANGE = 0;
   }
 }

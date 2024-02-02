@@ -151,6 +151,7 @@ void printMachineSettings() {
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     Serial.print("Motor ");
     Serial.print(i);
+    Serial.print(" ");
     Serial.println(motorSpeeds[i]);
   }
 }
