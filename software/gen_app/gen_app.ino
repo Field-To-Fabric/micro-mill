@@ -120,10 +120,9 @@ void stopMachine() {
 //void startMachine() {
 //  Serial.println("Starting machine");
 //  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-//    AccelStepper motor = motors[i];
-//    motor.setMaxSpeed(motorSpeeds[i]);
-//    motor.setAcceleration(ACCELERATION);
-//    motor.move(-1000000);
+//    motors[i].setMaxSpeed(motorSpeeds[i]);
+//    motors[i].setAcceleration(ACCELERATION);
+//    motors[i].move(-1000000);
 //  }
 //  printMachineSettings();
 //  
@@ -134,19 +133,19 @@ void stopMachine() {
 void startMachine() {
   Serial.println("Starting machine");
 
-  motor1.setMaxSpeed(100);
+  motor1.setMaxSpeed(motorSpeeds[0]);
   motor1.setAcceleration(ACCELERATION);
   motor1.move(-1000000);
-  motor2.setMaxSpeed(100);
+  motor2.setMaxSpeed(motorSpeeds[1]);
   motor2.setAcceleration(ACCELERATION);
   motor2.move(-1000000);
-  motor3.setMaxSpeed(100);
+  motor3.setMaxSpeed(motorSpeeds[2]);
   motor3.setAcceleration(ACCELERATION);
   motor3.move(-1000000);
-  motor4.setMaxSpeed(100);
+  motor4.setMaxSpeed(motorSpeeds[3]);
   motor4.setAcceleration(ACCELERATION);
   motor4.move(-1000000);
-  motor5.setMaxSpeed(100);
+  motor5.setMaxSpeed(motorSpeeds[4]);
   motor5.setAcceleration(ACCELERATION);
   motor5.move(-1000000);
 
