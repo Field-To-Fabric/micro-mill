@@ -34,12 +34,18 @@ float ACCELERATION = 500.00f;
 
 bool IS_RUNNING = false;
 
+AccelStepper motor1(AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
+AccelStepper motor2(AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
+AccelStepper motor3(AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
+AccelStepper motor4(AccelStepper::DRIVER, PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
+AccelStepper motor5(AccelStepper::DRIVER, PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR);
+
 AccelStepper motors[MOTORS_NUMBER] = {
-  (AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR),
-  (AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR),
-  (AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR),
-  (AccelStepper::DRIVER, PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR),
-  (AccelStepper::DRIVER, PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR),
+  motor1,
+  motor2,
+  motor3,
+  motor4,
+  motor5
 };
 
 
@@ -111,26 +117,61 @@ void stopMachine() {
   setSteppersEnabled(false);
 }
 
+//void startMachine() {
+//  Serial.println("Starting machine");
+//  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+//    AccelStepper motor = motors[i];
+//    motor.setMaxSpeed(motorSpeeds[i]);
+//    motor.setAcceleration(ACCELERATION);
+//    motor.move(-1000000);
+//  }
+//  printMachineSettings();
+//  
+//  IS_RUNNING = true;
+//  setSteppersEnabled(true);
+//}
+
 void startMachine() {
   Serial.println("Starting machine");
-  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-    AccelStepper motor = motors[i];
-    motor.setMaxSpeed(motorSpeeds[i]);
-    motor.setAcceleration(ACCELERATION);
-    motor.move(-1000000);
-  }
+
+  motor1.setMaxSpeed(100);
+  motor1.setAcceleration(ACCELERATION);
+  motor1.move(-1000000);
+  motor2.setMaxSpeed(100);
+  motor2.setAcceleration(ACCELERATION);
+  motor2.move(-1000000);
+  motor3.setMaxSpeed(100);
+  motor3.setAcceleration(ACCELERATION);
+  motor3.move(-1000000);
+  motor4.setMaxSpeed(100);
+  motor4.setAcceleration(ACCELERATION);
+  motor4.move(-1000000);
+  motor5.setMaxSpeed(100);
+  motor5.setAcceleration(ACCELERATION);
+  motor5.move(-1000000);
+
   printMachineSettings();
   
   IS_RUNNING = true;
   setSteppersEnabled(true);
 }
 
+//void runMachineLoop() {
+//  if (IS_RUNNING) {
+//    for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+//      AccelStepper motor = motors[i];
+//      motor.run();
+//    }
+//  }
+//}
+
 void runMachineLoop() {
   if (IS_RUNNING) {
-    for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-      AccelStepper motor = motors[i];
-      motor.run();
-    }
+      motor1.run();
+      motor2.run();
+      motor3.run();
+      motor4.run();
+      motor5.run();
   }
 }
 
