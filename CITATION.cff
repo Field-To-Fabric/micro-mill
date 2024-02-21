@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using these metadata.
+title: Micro-Mill Construction Guide
+abstract: >
+  This guide contains instructions for building a textile processing micro-mill. The instructions cover the assembly of the
+  hardware as well the software for operating the machinery. This work builds on that of Hilo Textiles.
+authors:
+  - family-names: Masters
+    given-names: Jordon
+  - family-names: Evans
+    given-names: Nick
+  - family-names: Bristow
+    given-names: Rosie
+version: 0.1.0
+date-released: "2024-02-21"
+license: MIT
+repository-code: https://github.com/Field-To-Fabric/hilomods"
+references:
+  - authors:
+      - family-names: Diaz
+        given-names: Sara
+    title: "Hilo Spinning Machine 3.0"
+    type: software
