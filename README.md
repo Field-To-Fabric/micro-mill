@@ -1,8 +1,5 @@
-# hilomods
+# Micro Mill
 
-Modifications to [Studio Hilo's](https://gitlab.opensourceecology.de/verein/projekte/cab/hilo-spinning-machine)
-spinning machine.
+This repository contains the instructions for construction all the Fantasy Fibre Mill textile processing machines. 
 
-## Software
-Alternative software for operating the Hilo. See the README in that folder for details.
-
+All these machines have their genesis in Studio Hilo's spinning machine.
