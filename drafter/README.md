@@ -54,11 +54,11 @@ The drafting machine is intended for drafting (and doubling) sliver and roving t
 ## Assembly
 * Assemble the aluminium extrusion frame. The two long bars should be spaced 165mm apart. They must be stacked on two layers of extrusion (60mm high).
 * Attach the stepper mount to extrusion.
-* Screw driven roller on to threaded rod leaving 3cm clear at one end. Fasten in place on both sides using a lock nut.
+* Screw driven roller on to threaded rod leaving 5cm clear at one end. Fasten in place on both sides using a lock nut.
 * Sand down the trailing wheels for cot until you can push them into the drafter cot - it should be a (very) tight fit!
 * Place a bearing in each trailing wheel and insert onto the rod (placement on the rod is not so important as it can be adjusted later). Place another bearing either side of the cot (acting as a spacer) and then fix in place with a lock nut. The cot should be able to rotate freely.
-* Place 2 10-24 screws from the bottom up through the holes on the stepper mount and fasten with a nut.
-* Stack 2 pillow-block through the bolts.
+* Place 2 10-24 screws from the bottom up through the holes on the stepper mount, place a pillow block on top and fasten with nut (important to fasten after placing the pillow block otherwise the bores won't align).
+* Stack the second pillow-block through the bolts on top of the first.
 * Place a spring over each bolt and fix in place with a washer and nut.
 * Repeat for all stepper and pillow block mounts.
 * Attach the stepper mounts and pillow blocks to the extrusion bars. Fasten the stepper motor to the mount and attach the driven roller rod to the motor using the coupling.
