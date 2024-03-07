@@ -20,6 +20,10 @@
 #define PIN_ELEVATOR_A_DIR    34  // Elevator Motors Direction Pin
 #define PIN_ELEVATOR_A_ENABLE 30  // Elevator Motors Enable Pin
 
+#define PIN_FLYER_STEP   26  // Flyer Motors Step Pin
+#define PIN_FLYER_DIR    28  // Flyer Motors Direction Pin
+#define PIN_FLYER_ENABLE 24  // Flyer Motors Enable Pin
+
 #define PIN_END_STOP_X_MIN     3  // X Min End Stop Pin
 #define PIN_END_STOP_X_MAX     2  // X Max End Stop Pin
 
@@ -27,7 +31,8 @@ int DRAFTING_SPEED_PERCENTAGE = 40;
 int DELIVERY_SPEED            = 150;
 int SPINDLE_SPEED             = 700;
 int ELEVATOR_SPEED            = 100;
-char SPINDLE_DIRECTION = 'Z';
+int FLYER_SPEED               = 100;
+char SPINDLE_DIRECTION = 'S';
 
 // The end stop should not be triggered very frequently.
 const long END_STOP_TRIGGER_INTERVAL = 5000; 
@@ -39,12 +44,20 @@ volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
 float ACCELERATION = 500.00f;
 
 bool IS_RUNNING = false;
-long START_COUNTER = 0;
+
+// Setting the enable the driver flyer mod.
+// TODO Add this option to the screen controller.
+bool ENABLE_FLYER = false;
+// When spinning it's useful to delay the drafting start to allow the twist to build up a bit. 
+// When using the flyer this is unnecessary and will break the roving.
+int DRAFTING_START_DELAY = 10000;
+long START_COUNTER = ENABLE_FLYER ? 0 : DRAFTING_START_DELAY;
 
 AccelStepper motorDrafting(AccelStepper::DRIVER, PIN_DRAFTING_STEP, PIN_DRAFTING_DIR);
 AccelStepper motorDelivery(AccelStepper::DRIVER, PIN_DELIVERY_STEP, PIN_DELIVERY_DIR);
 AccelStepper motorElevator(AccelStepper::DRIVER, PIN_ELEVATOR_A_STEP, PIN_ELEVATOR_A_DIR);
-AccelStepper motorSpindle(AccelStepper::DRIVER, PIN_SPINDLE_STEP,    PIN_SPINDLE_DIR);
+AccelStepper motorSpindle(AccelStepper::DRIVER, PIN_SPINDLE_STEP, PIN_SPINDLE_DIR);
+AccelStepper motorFlyer(AccelStepper::DRIVER, PIN_FLYER_STEP, PIN_FLYER_DIR);
 
 void setup() {
   Serial.begin(HILO_SERIAL_BAUDRATE);
@@ -63,6 +76,7 @@ void setup() {
   pinMode (PIN_DELIVERY_ENABLE,   OUTPUT);
   pinMode (PIN_ELEVATOR_A_ENABLE, OUTPUT);
   pinMode (PIN_SPINDLE_ENABLE,    OUTPUT);
+  pinMode (PIN_FLYER_ENABLE,    OUTPUT);
 
   setSteppersEnabled(false);
 }
@@ -89,6 +103,12 @@ void serialCommunicationLoop() {
       Serial.print("Spindle speed set to: ");
       Serial.println(SPINDLE_SPEED);
     }
+    if (data.startsWith("f")) {
+      int flyerSpeed = data.substring(1).toInt();
+      FLYER_SPEED = flyerSpeed;
+      Serial.print("FLyer speed set to: ");
+      Serial.println(FLYER_SPEED);
+    }
     if (data.startsWith("d")) {
       int deliverySpeed = data.substring(1).toInt();
       DELIVERY_SPEED = deliverySpeed;
@@ -105,6 +125,11 @@ void serialCommunicationLoop() {
       ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
       Serial.print("Elevator direction set to: ");
       Serial.println(ELEVATOR_DIRECTION);
+    }
+    if (data.startsWith("t")) {
+      toggleSpindleDirection();
+      Serial.print("Twist direction set to: ");
+      Serial.println(SPINDLE_DIRECTION);
     }
   }
 }
@@ -130,6 +155,12 @@ void stopMachine() {
   motorSpindle.setCurrentPosition(0);
   motorElevator.stop();
   motorElevator.setCurrentPosition(0);
+
+  if (ENABLE_FLYER) {
+    motorFlyer.stop();
+    motorFlyer.setCurrentPosition(0);
+  }
+  
   setSteppersEnabled(false);
 }
 
@@ -158,6 +189,14 @@ void startMachine() {
   motorElevator.setAcceleration(ACCELERATION);
   setElevatorMove();
 
+  //FLYER
+  if (ENABLE_FLYER) {
+    motorFlyer.setMaxSpeed(FLYER_SPEED);
+    motorFlyer.setAcceleration(ACCELERATION);
+    // The flyer should go in the same direction as the spindle.
+    motorFlyer.move(1000000 * spindleDirection);
+  }
+
   printMachineSettings(draftingSpeed);
   
   IS_RUNNING = true;
@@ -168,7 +207,10 @@ void runMachineLoop() {
   if (IS_RUNNING) {
       motorSpindle.run();
       motorElevator.run();
-      if (START_COUNTER > 10000) { 
+      if (ENABLE_FLYER) { 
+        motorFlyer.run();
+      }
+      if (START_COUNTER > DRAFTING_START_DELAY) { 
         // Build in a delay in starting the delivery, to allow for some twist build up.
         motorDelivery.run();
         motorDrafting.run();
@@ -192,6 +234,9 @@ void setSteppersEnabled(bool enabled) {
   digitalWrite(PIN_DELIVERY_ENABLE,   value);
   digitalWrite(PIN_ELEVATOR_A_ENABLE, value);
   digitalWrite(PIN_SPINDLE_ENABLE,    value);
+  if (ENABLE_FLYER) {
+    digitalWrite(PIN_FLYER_ENABLE,    value);
+  }
 }
 
 // Direction is +/- 1
@@ -258,4 +303,6 @@ void printMachineSettings(int draftingSpeed) {
   Serial.println(SPINDLE_SPEED);
   Serial.print("Elevator direction:");
   Serial.println(ELEVATOR_DIRECTION);
+  Serial.print("Flyer enabled:");
+  Serial.println(ENABLE_FLYER);
 }

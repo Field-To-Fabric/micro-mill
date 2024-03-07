@@ -27,11 +27,8 @@
 #define PIN_END_STOP_X_MIN     3  // X Min End Stop Pin
 #define PIN_END_STOP_X_MAX     2  // X Max End Stop Pin
 
-int MOTOR_1_STEPS = 100;
-int MOTOR_2_STEPS = 100;
-int MOTOR_3_STEPS = 100;
-int MOTOR_4_STEPS = 100;
-int MOTOR_5_STEPS = 100;
+const int MOTORS_NUMBER = 5;
+int motorSpeeds[MOTORS_NUMBER] = {100, 100, 100, 100, 100};
 
 float ACCELERATION = 500.00f;
 
@@ -39,9 +36,18 @@ bool IS_RUNNING = false;
 
 AccelStepper motor1(AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
 AccelStepper motor2(AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
-AccelStepper motor3(AccelStepper::DRIVER, PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
-AccelStepper motor4(AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
+AccelStepper motor3(AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
+AccelStepper motor4(AccelStepper::DRIVER, PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
 AccelStepper motor5(AccelStepper::DRIVER, PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR);
+
+AccelStepper* motors[MOTORS_NUMBER] = {
+  & motor1,
+  & motor2,
+  & motor3,
+  & motor4,
+  & motor5
+};
+
 
 void setup() {
   Serial.begin(HILO_SERIAL_BAUDRATE);
@@ -54,15 +60,18 @@ void setup() {
   // set the mode for the stepper driver enable pins
   pinMode (PIN_MOTOR_1_ENABLE, OUTPUT);
   pinMode (PIN_MOTOR_2_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_4_ENABLE, OUTPUT);
   pinMode (PIN_MOTOR_3_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_4_ENABLE, OUTPUT);
   pinMode (PIN_MOTOR_5_ENABLE, OUTPUT);
+
+  setupScreenController();
 
   setSteppersEnabled(false);
 }
 
 void loop() {
   serialCommunicationLoop();
+  screenControllerLoop();
   runMachineLoop();
 }
 
@@ -79,26 +88,7 @@ void serialCommunicationLoop() {
     if (data.startsWith("m")) {
       int motor = data.substring(1,2).toInt();
       int motorSpeed = data.substring(2).toInt();
-      switch (motor) {
-        case 1: 
-          MOTOR_1_STEPS = motorSpeed;
-          break;
-        case 2: 
-          MOTOR_2_STEPS = motorSpeed;
-          break;
-        case 3: 
-          MOTOR_3_STEPS = motorSpeed;
-          break;
-        case 4: 
-          MOTOR_4_STEPS = motorSpeed;
-          break;
-        case 5:
-          MOTOR_5_STEPS = motorSpeed;
-          break;
-        default:
-          Serial.print("Unrecognized motor number ");
-          Serial.println(motor);
-      }
+      motorSpeeds[motor] = motorSpeed;
       Serial.print("Set motor ");
       Serial.print(motor);
       Serial.print(" to ");
@@ -119,39 +109,21 @@ boolean startStopMachine() {
 void stopMachine() {
   Serial.println("Stopping machine");
   IS_RUNNING = false;
-  motor1.stop();
-  motor1.setCurrentPosition(0);
-  motor2.stop();
-  motor2.setCurrentPosition(0);
-  motor3.stop();
-  motor3.setCurrentPosition(0);
-  motor4.stop();
-  motor4.setCurrentPosition(0);
-  motor5.stop();
-  motor5.setCurrentPosition(0);
-
+  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+    AccelStepper motor = motors[i];
+    motor.stop();
+    motor.setCurrentPosition(0);
+  }  
   setSteppersEnabled(false);
 }
 
 void startMachine() {
   Serial.println("Starting machine");
-
-  motor1.setMaxSpeed(MOTOR_1_STEPS);
-  motor1.setAcceleration(ACCELERATION);
-  motor1.move(-1000000);
-  motor2.setMaxSpeed(MOTOR_2_STEPS);
-  motor2.setAcceleration(ACCELERATION);
-  motor2.move(-1000000);
-  motor3.setMaxSpeed(MOTOR_3_STEPS);
-  motor3.setAcceleration(ACCELERATION);
-  motor3.move(-1000000);
-  motor4.setMaxSpeed(MOTOR_4_STEPS);
-  motor4.setAcceleration(ACCELERATION);
-  motor4.move(-1000000);
-  motor5.setMaxSpeed(MOTOR_5_STEPS);
-  motor5.setAcceleration(ACCELERATION);
-  motor5.move(-1000000);
-
+  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+    motors[i]->setMaxSpeed(motorSpeeds[i]);
+    motors[i]->setAcceleration(ACCELERATION);
+    motors[i]->move(-1000000);
+  }
   printMachineSettings();
   
   IS_RUNNING = true;
@@ -160,13 +132,12 @@ void startMachine() {
 
 void runMachineLoop() {
   if (IS_RUNNING) {
-      motor1.run();
-      motor2.run();
-      motor3.run();
-      motor4.run();
-      motor5.run();
+    for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+      AccelStepper* motor = motors[i];
+      motor->run();
+    }
   }
-}
+} 
 
 // Enables or disables all steppers. Used for saving power
 // and allowing adjustments by hand when the machine isn't running.
@@ -182,14 +153,17 @@ void setSteppersEnabled(bool enabled) {
 }
 
 void printMachineSettings() {
-  Serial.print("Motor 1: ");
-  Serial.println(MOTOR_1_STEPS);
-  Serial.print("Motor 2: ");
-  Serial.println(MOTOR_2_STEPS);
-  Serial.print("Motor 3: ");
-  Serial.println(MOTOR_3_STEPS);
-  Serial.print("Motor 4: ");
-  Serial.println(MOTOR_4_STEPS);
-  Serial.print("Motor 5: ");
-  Serial.println(MOTOR_5_STEPS);
+  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+    Serial.print("Motor ");
+    Serial.print(i);
+    Serial.print(" ");
+    Serial.println(motorSpeeds[i]);
+  }
+}
+
+int incrementMotorSpeed(int motorNumber, int direction) {
+  int speed = motorSpeeds[motorNumber];
+  speed = speed + 50 * direction;
+  motorSpeeds[motorNumber] = speed;
+  return speed;
 }
