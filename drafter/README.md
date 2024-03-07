@@ -35,7 +35,7 @@ The drafting machine is intended for drafting (and doubling) sliver and roving t
 - 2 x Drive wheel
 - 4 x Trailing wheel for cot
 
-## Electronics
+### Electronics
 - Arduino Mega
 - RAMPS 1.4 Shield
 - 2 x TB6600 Stepper Motor Driver
@@ -64,7 +64,7 @@ The drafting machine is intended for drafting (and doubling) sliver and roving t
 * Attach the stepper mounts and pillow blocks to the extrusion bars. Fasten the stepper motor to the mount and attach the driven roller rod to the motor using the coupling.
 * Time to wire up the motors to the arduino and to the power supply...
 
-## Wiring
+### Wiring
 
 [WIRING DIAGRAM NEEDED]
 

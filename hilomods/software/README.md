@@ -2,6 +2,14 @@
 Alternative operating software for Studio Hilo's spinning machine. Open ```hilo_app/hilo_app.ino```
 in the arduino IDE, upload the code to the arduino and you are ready to go!
 
+## Operation
+If you are not using the screen controller you can control the arduino using the Serial Monitor, you open it by clicking the icnon in the top right of the screen:
+
+![arduino serial monitor](./images/arduino_serial_monitor.jpg "arduino serial monitor").
+
+You can start and stop the motor by sending commands to the arduino using the input field.
+Pressing [ENTER] sends the command to the arduino. [SPACEBAR] [ENTER] starts the machine, and [SPACEBAR] [ENTER] stops the machine. You can also control the motor speeds by sending commands like [d100] [ENTER] - this sets the delivery speed to 100 steps. The other controls are: s (spindle), p (percentage - controls drafting ratio).
+
 ## Smart Controller
 This mod adds a Smart Controller for operating the Hilo directly without need for plugging in a computer.
 
