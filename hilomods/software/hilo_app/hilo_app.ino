@@ -34,6 +34,14 @@ int ELEVATOR_SPEED            = 100;
 int FLYER_SPEED               = 100;
 char SPINDLE_DIRECTION = 'S';
 
+// Variables that can't yet be set from the LCD
+// Diameter of the cot operated by the delivery motor. Used 
+// to convert steps into distance.
+int COT_DIAMETER_MM = 30;
+// The micro step setting (always > 1).
+int MICRO_STEPS = 1;
+float STEP_DISTANCE_MM = (3.14*COT_DIAMETER_MM)/(360/(MICRO_STEPS * 1.8));
+
 // The end stop should not be triggered very frequently.
 const long END_STOP_TRIGGER_INTERVAL = 5000; 
 // Marked volatile as these are modified from an interrupt method.
@@ -145,6 +153,16 @@ boolean startStopMachine() {
 
 void stopMachine() {
   Serial.println("Stopping machine");
+  // Print out the stats for this run:
+  long deliverySteps = abs(getDeliverySteps());
+  char stepsDeliveredMsg[50];
+  sprintf (stepsDeliveredMsg, "Steps delivered: %d", deliverySteps);
+  Serial.println(stepsDeliveredMsg);
+  long deliveryDistance = abs(getDistanceMovedMM(deliverySteps));
+  char distanceDeliveredMsg[50];
+  sprintf (distanceDeliveredMsg, "Length delivered: %d", deliveryDistance);
+  Serial.println(distanceDeliveredMsg);
+  
   IS_RUNNING = false;
   START_COUNTER = 0;
   motorDrafting.stop();
@@ -290,6 +308,15 @@ void setElevatorMove() {
   Serial.println("Reversing elevator direction");
   motorElevator.setCurrentPosition(0);
   motorElevator.move(1000000 * ELEVATOR_DIRECTION);
+}
+
+long getDeliverySteps() {
+  long deliverySteps = motorDelivery.currentPosition();
+  return deliverySteps;
+}
+
+long getDistanceMovedMM(long steps) {
+  return round((STEP_DISTANCE_MM * steps));
 }
 
 void printMachineSettings(int draftingSpeed) {

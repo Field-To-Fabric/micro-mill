@@ -70,6 +70,7 @@ void screenControllerLoop() {
   CURRENT_MILLIS = millis();
   
   encoderButtonTrigger();
+
   if (IS_RUNNING) {
     // While running we want to do as little as possible to ensure a smooth run.
     return;
@@ -79,14 +80,10 @@ void screenControllerLoop() {
 
   //check if it is time to update the display 
   if (CURRENT_MILLIS - PREVIOUS_MILLIS >= DISPLAY_INTERVAL) {
-    PREVIOUS_MILLIS = CURRENT_MILLIS;
-
-    //Draw new screen
-    u8g.firstPage();
-    do {  
-      drawHilo();
-    } while( u8g.nextPage() );
+    PREVIOUS_MILLIS = CURRENT_MILLIS; 
+    drawHilo();
   }
+  
 }
 
 void updateMenu() {
@@ -182,6 +179,18 @@ void encoderTrigger() {
 }
 
 void drawHilo() {
+  //Draw new screen
+  u8g.firstPage();
+  do {  
+    if (IS_RUNNING) {
+      drawHiloRunning();
+    } else {
+      drawHiloIdle();
+    }
+  } while( u8g.nextPage() );
+}
+
+void drawHiloIdle() {
   u8g.setFont(u8g_font_helvR08);        // Set the font for the display
   u8g.setDefaultForegroundColor();
   unsigned int h = u8g.getFontAscent()-u8g.getFontDescent();
@@ -212,22 +221,18 @@ void toggleHilo() {
   }
 }
 
-void startHilo() {
-  //Draw Hilo stop screen
-  u8g.firstPage();
-  do {  
-    drawHiloStop();
-  } while( u8g.nextPage() );
-  
-  startStopMachine();
-}
-
-void drawHiloStop() {
+void drawHiloRunning() {
   u8g.setFont(u8g_font_helvR08);
   u8g.setDefaultForegroundColor();
   u8g.drawStr(2, 10, "Running...");
   u8g.drawStr(2, 19, "Press to stop.");
 }
+
+void startHilo() {
+  startStopMachine();
+  drawHilo();
+}
+  
 
 void stopHilo() {
   startStopMachine();
