@@ -34,6 +34,14 @@ float ACCELERATION = 500.00f;
 
 bool IS_RUNNING = false;
 
+// The end stop should not be triggered very frequently.
+const long END_STOP_TRIGGER_INTERVAL = 5000; 
+// Marked volatile as these are modified from an interrupt method.
+volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
+
+// Which motor should be triggered by the end stop.
+int END_STOP_MOTOR_INDEX = 4;
+
 AccelStepper motor1(AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
 AccelStepper motor2(AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
 AccelStepper motor3(AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
@@ -65,7 +73,7 @@ void setup() {
   pinMode (PIN_MOTOR_5_ENABLE, OUTPUT);
 
   setupScreenController();
-
+  setupEndStops();
   setSteppersEnabled(false);
 }
 
@@ -166,4 +174,22 @@ int incrementMotorSpeed(int motorNumber, int direction) {
   speed = speed + 50 * direction;
   motorSpeeds[motorNumber] = speed;
   return speed;
+}
+
+void setupEndStops() {
+  pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
+  pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
+}
+
+void endStopTrigger() {
+  const unsigned long currentMillis = millis();
+  if (currentMillis > (END_STOP_TRIGGER_MILLIS_LAST + END_STOP_TRIGGER_INTERVAL)) {
+    Serial.println("End stop triggered");
+    long currentTarget = motors[END_STOP_MOTOR_INDEX]->targetPosition();
+    motors[END_STOP_MOTOR_INDEX]->setCurrentPosition(0);
+    motors[END_STOP_MOTOR_INDEX]->move(-currentTarget);
+    END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
+  }
 }
