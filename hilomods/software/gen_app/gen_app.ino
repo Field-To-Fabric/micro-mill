@@ -28,7 +28,7 @@
 #define PIN_END_STOP_X_MAX     2  // X Max End Stop Pin
 
 const int MOTORS_NUMBER = 5;
-int motorSpeeds[MOTORS_NUMBER] = {100, 100, 100, 100, 100};
+int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
 
 float ACCELERATION = 500.00f;
 
