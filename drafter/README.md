@@ -62,7 +62,11 @@ The drafting machine is intended for drafting (and doubling) sliver and roving t
 * Place a spring over each bolt and fix in place with a washer and nut.
 ![Assembled rollers](./images/Assembled_rollers.jpeg "Assembled rollers")
 * Repeat for all stepper and pillow block mounts.
+![Close up Pillow block](./images/Close_up_Pillow_block.jpeg "Close up Pillow block")
 * Attach the stepper mounts and pillow blocks to the extrusion bars. Fasten the stepper motor to the mount and attach the driven roller rod to the motor using the coupling.
+  ![Attaching coupling to motor](./images/Attaching_coupling_to_motor.jpeg "Attaching coupling to motor")
+  ![Attaching coupling to axle](./images/Attaching_coupling_to_axle.jpeg "Attaching coupling to axle")
+  ![Bolting motor to motor mount](./images/Bolting_motor_to_motor_mount.jpeg "Bolting motor to motor mount")
 * Time to wire up the motors to the arduino and to the power supply...
 
 ### Wiring
