@@ -42,6 +42,9 @@ volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
 // Which motor should be triggered by the end stop.
 int END_STOP_MOTOR_INDEX = 4;
 
+// Motor direction
+int MOTOR_DIR = 1;
+
 AccelStepper motor1(AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
 AccelStepper motor2(AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
 AccelStepper motor3(AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
@@ -102,6 +105,10 @@ void serialCommunicationLoop() {
       Serial.print(" to ");
       Serial.println(motorSpeed);
     }
+    if (data.startsWith("R")) {
+      Serial.println("Reversion motor direction");
+      MOTOR_DIR = -MOTOR_DIR;
+    }
   }
 }
 
@@ -130,7 +137,7 @@ void startMachine() {
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     motors[i]->setMaxSpeed(motorSpeeds[i]);
     motors[i]->setAcceleration(ACCELERATION);
-    motors[i]->move(-1000000);
+    motors[i]->move(1000000 * MOTOR_DIR);
   }
   printMachineSettings();
   
@@ -171,7 +178,7 @@ void printMachineSettings() {
 
 int incrementMotorSpeed(int motorNumber, int direction) {
   int speed = motorSpeeds[motorNumber];
-  speed = speed + 50 * direction;
+  speed = speed + 25 * direction;
   motorSpeeds[motorNumber] = speed;
   return speed;
 }
