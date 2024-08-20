@@ -125,9 +125,9 @@ void stopMachine() {
   Serial.println("Stopping machine");
   IS_RUNNING = false;
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-    AccelStepper motor = motors[i];
-    motor.stop();
-    motor.setCurrentPosition(0);
+    AccelStepper* motor = motors[i];
+    motor->stop();
+    motor->setCurrentPosition(0);
   }  
   setSteppersEnabled(false);
 }
