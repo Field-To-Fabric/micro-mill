@@ -24,8 +24,14 @@
 #define PIN_MOTOR_5_DIR    28  // Motors 5 Direction Pin
 #define PIN_MOTOR_5_ENABLE 24  // Motors 5 Enable Pin
 
-#define PIN_END_STOP_X_MIN     3  // X Min End Stop Pin
-#define PIN_END_STOP_X_MAX     2  // X Max End Stop Pin
+#define PIN_END_STOP_X_MAX     3  // X Max End Stop Pin
+#define PIN_END_STOP_X_MIN     2  // X Min End Stop Pin
+#define PIN_END_STOP_Y_MIN     14  // Y Min End Stop Pin
+#define PIN_END_STOP_Y_MAX     15  // Y Max End Stop Pin
+#define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
+#define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
+
+long MAX_TARGET_POSITION = 200000000;
 
 const int MOTORS_NUMBER = 5;
 int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
@@ -34,10 +40,16 @@ float ACCELERATION = 500.00f;
 
 bool IS_RUNNING = false;
 
+
 // The end stop should not be triggered very frequently.
 const long END_STOP_TRIGGER_INTERVAL = 5000; 
+const long SWITCH_START_STOP_INTERVAL = 1000; 
+const long MAX_POSITION_INTERVAL = 10000;
 // Marked volatile as these are modified from an interrupt method.
 volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
+volatile unsigned long SWITCH_START_STOP_LAST = 0;
+unsigned long MAX_POSITION_INTERVAL_LAST = 0;
+volatile signed int ELEVATOR_DIRECTION = 1;
 
 // Which motor should be triggered by the end stop.
 int END_STOP_MOTOR_INDEX = 4;
@@ -84,6 +96,7 @@ void loop() {
   serialCommunicationLoop();
   screenControllerLoop();
   runMachineLoop();
+  startStopBySwitchTrigger();
 }
 
 // This loops allows you to send commands to the machine through the Arduino Serial Monitor.
@@ -137,11 +150,16 @@ void startMachine() {
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     motors[i]->setMaxSpeed(motorSpeeds[i]);
     motors[i]->setAcceleration(ACCELERATION);
-    motors[i]->move(1000000 * MOTOR_DIR);
+    int moveTarget = MAX_TARGET_POSITION * MOTOR_DIR;
+    if (i == END_STOP_MOTOR_INDEX) {
+      moveTarget = moveTarget * ELEVATOR_DIRECTION;
+    }
+    motors[i]->move(moveTarget);
   }
   printMachineSettings();
   
   IS_RUNNING = true;
+  MAX_POSITION_INTERVAL_LAST = millis();
   setSteppersEnabled(true);
 }
 
@@ -151,6 +169,23 @@ void runMachineLoop() {
       AccelStepper* motor = motors[i];
       motor->run();
     }
+    // Check if any target positions need updating
+    const unsigned long currentMillis = millis();
+    if (currentMillis - MAX_POSITION_INTERVAL_LAST > MAX_POSITION_INTERVAL) {
+      for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+        AccelStepper* motor = motors[i];
+        long distanceToGo = motor->distanceToGo();
+        if (distanceToGo < 10000) {
+          motor->setCurrentPosition(0);
+          // Side effect is that speed gets set to 0 so we have to set that again
+          motor->setMaxSpeed(motorSpeeds[i]);
+          motor->setAcceleration(10000);
+          motor->move(MAX_TARGET_POSITION);
+          motor->run();
+        }
+      }
+      MAX_POSITION_INTERVAL_LAST = currentMillis;
+    };
   }
 } 
 
@@ -185,7 +220,9 @@ int incrementMotorSpeed(int motorNumber, int direction) {
 
 void setupEndStops() {
   pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
-  pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
+  // Not needed at the moment.
+  //pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
+  pinMode(PIN_END_STOP_Y_MIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
   attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
 }
@@ -195,8 +232,21 @@ void endStopTrigger() {
   if (currentMillis > (END_STOP_TRIGGER_MILLIS_LAST + END_STOP_TRIGGER_INTERVAL)) {
     Serial.println("End stop triggered");
     long currentTarget = motors[END_STOP_MOTOR_INDEX]->targetPosition();
+    ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
     motors[END_STOP_MOTOR_INDEX]->setCurrentPosition(0);
     motors[END_STOP_MOTOR_INDEX]->move(-currentTarget);
     END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
+  }
+}
+
+void startStopBySwitchTrigger() {
+  int triggered = digitalRead(PIN_END_STOP_Y_MIN);
+  const unsigned long currentMillis = millis();
+  if (triggered == LOW) {
+    if (currentMillis > (SWITCH_START_STOP_LAST + SWITCH_START_STOP_INTERVAL)) {
+      Serial.println("Start/Stop endstop triggered");
+      SWITCH_START_STOP_LAST = currentMillis;
+      startStopMachine();
+    }
   }
 }
