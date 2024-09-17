@@ -31,7 +31,7 @@
 #define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
-long MAX_TARGET_POSITION = 200000000;
+signed long MAX_TARGET_POSITION = 10000000;
 
 const int MOTORS_NUMBER = 5;
 int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
@@ -55,7 +55,7 @@ volatile signed int ELEVATOR_DIRECTION = 1;
 int END_STOP_MOTOR_INDEX = 4;
 
 // Motor direction
-int MOTOR_DIR = 1;
+signed long MOTOR_DIR = 1;
 
 AccelStepper motor1(AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
 AccelStepper motor2(AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
@@ -148,6 +148,7 @@ void stopMachine() {
 void startMachine() {
   Serial.println("Starting machine");
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+    motors[i]->setCurrentPosition(0);
     motors[i]->setMaxSpeed(motorSpeeds[i]);
     motors[i]->setAcceleration(ACCELERATION);
     int moveTarget = MAX_TARGET_POSITION * MOTOR_DIR;
@@ -179,8 +180,9 @@ void runMachineLoop() {
           motor->setCurrentPosition(0);
           // Side effect is that speed gets set to 0 so we have to set that again
           motor->setMaxSpeed(motorSpeeds[i]);
-          motor->setAcceleration(10000);
-          motor->move(MAX_TARGET_POSITION);
+          motor->setAcceleration(10000.00f);
+          int moveTarget = MAX_TARGET_POSITION * MOTOR_DIR;
+          motor->move(moveTarget);
           motor->run();
         }
       }
