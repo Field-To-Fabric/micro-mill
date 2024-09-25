@@ -1,4 +1,4 @@
-#include <AccelStepper.h>
+#include <ContinuousStepper.h>
 
 #define HILO_SERIAL_BAUDRATE 115200
 
@@ -39,16 +39,15 @@ int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
 float ACCELERATION = 500.00f;
 
 bool IS_RUNNING = false;
+bool ENABLE_END_STOPS = true;
 
 
 // The end stop should not be triggered very frequently.
 const long END_STOP_TRIGGER_INTERVAL = 5000; 
 const long SWITCH_START_STOP_INTERVAL = 1000; 
-const long MAX_POSITION_INTERVAL = 10000;
 // Marked volatile as these are modified from an interrupt method.
 volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
 volatile unsigned long SWITCH_START_STOP_LAST = 0;
-unsigned long MAX_POSITION_INTERVAL_LAST = 0;
 volatile signed int ELEVATOR_DIRECTION = 1;
 
 // Which motor should be triggered by the end stop.
@@ -57,13 +56,13 @@ int END_STOP_MOTOR_INDEX = 4;
 // Motor direction
 signed long MOTOR_DIR = 1;
 
-AccelStepper motor1(AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
-AccelStepper motor2(AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
-AccelStepper motor3(AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
-AccelStepper motor4(AccelStepper::DRIVER, PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
-AccelStepper motor5(AccelStepper::DRIVER, PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR);
+ContinuousStepper<StepperDriver> motor1;
+ContinuousStepper<StepperDriver> motor2;
+ContinuousStepper<StepperDriver> motor3;
+ContinuousStepper<StepperDriver> motor4;
+ContinuousStepper<StepperDriver> motor5;
 
-AccelStepper* motors[MOTORS_NUMBER] = {
+ContinuousStepper<StepperDriver>* motors[MOTORS_NUMBER] = {
   & motor1,
   & motor2,
   & motor3,
@@ -79,16 +78,11 @@ void setup() {
   
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
-  
-  // set the mode for the stepper driver enable pins
-  pinMode (PIN_MOTOR_1_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_2_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_3_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_4_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_5_ENABLE, OUTPUT);
-
+  initMotors();
   setupScreenController();
-  setupEndStops();
+  if (ENABLE_END_STOPS) {
+    setupEndStops();
+  }
   setSteppersEnabled(false);
 }
 
@@ -96,7 +90,29 @@ void loop() {
   serialCommunicationLoop();
   screenControllerLoop();
   runMachineLoop();
-  startStopBySwitchTrigger();
+  if (ENABLE_END_STOPS) {
+    startStopBySwitchTrigger();
+  }
+}
+
+void initMotors() {
+  // set the mode for the stepper driver enable pins
+  pinMode (PIN_MOTOR_1_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_2_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_3_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_4_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_5_ENABLE, OUTPUT);
+  
+  motor1.begin(PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
+  motor1.setEnablePin(PIN_MOTOR_1_ENABLE, LOW);
+  motor2.begin(PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
+  motor2.setEnablePin(PIN_MOTOR_2_ENABLE, LOW);
+  motor3.begin(PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
+  motor3.setEnablePin(PIN_MOTOR_3_ENABLE, LOW);
+  motor4.begin(PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
+  motor4.setEnablePin(PIN_MOTOR_4_ENABLE, LOW);
+  motor5.begin(PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR);
+  motor5.setEnablePin(PIN_MOTOR_5_ENABLE, LOW);
 }
 
 // This loops allows you to send commands to the machine through the Arduino Serial Monitor.
@@ -138,9 +154,8 @@ void stopMachine() {
   Serial.println("Stopping machine");
   IS_RUNNING = false;
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-    AccelStepper* motor = motors[i];
+    ContinuousStepper<StepperDriver>* motor = motors[i];
     motor->stop();
-    motor->setCurrentPosition(0);
   }  
   setSteppersEnabled(false);
 }
@@ -148,46 +163,23 @@ void stopMachine() {
 void startMachine() {
   Serial.println("Starting machine");
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-    motors[i]->setCurrentPosition(0);
-    motors[i]->setMaxSpeed(motorSpeeds[i]);
-    motors[i]->setAcceleration(ACCELERATION);
-    int moveTarget = MAX_TARGET_POSITION * MOTOR_DIR;
+    int motorSpeed = motorSpeeds[i] * MOTOR_DIR;
     if (i == END_STOP_MOTOR_INDEX) {
-      moveTarget = moveTarget * ELEVATOR_DIRECTION;
+      motorSpeed = motorSpeed * ELEVATOR_DIRECTION;
     }
-    motors[i]->move(moveTarget);
+    motors[i]->spin(motorSpeed);
   }
-  printMachineSettings();
-  
+  printMachineSettings(); 
   IS_RUNNING = true;
-  MAX_POSITION_INTERVAL_LAST = millis();
   setSteppersEnabled(true);
 }
 
 void runMachineLoop() {
   if (IS_RUNNING) {
     for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-      AccelStepper* motor = motors[i];
-      motor->run();
+      ContinuousStepper<StepperDriver>* motor = motors[i];
+      motor->loop();
     }
-    // Check if any target positions need updating
-    const unsigned long currentMillis = millis();
-    if (currentMillis - MAX_POSITION_INTERVAL_LAST > MAX_POSITION_INTERVAL) {
-      for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-        AccelStepper* motor = motors[i];
-        long distanceToGo = motor->distanceToGo();
-        if (distanceToGo < 10000) {
-          motor->setCurrentPosition(0);
-          // Side effect is that speed gets set to 0 so we have to set that again
-          motor->setMaxSpeed(motorSpeeds[i]);
-          motor->setAcceleration(10000.00f);
-          int moveTarget = MAX_TARGET_POSITION * MOTOR_DIR;
-          motor->move(moveTarget);
-          motor->run();
-        }
-      }
-      MAX_POSITION_INTERVAL_LAST = currentMillis;
-    };
   }
 } 
 
@@ -224,19 +216,16 @@ void setupEndStops() {
   pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
   // Not needed at the moment.
   //pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
-  pinMode(PIN_END_STOP_Y_MIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
-  attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
+  //attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
 }
 
 void endStopTrigger() {
   const unsigned long currentMillis = millis();
   if (currentMillis > (END_STOP_TRIGGER_MILLIS_LAST + END_STOP_TRIGGER_INTERVAL)) {
     Serial.println("End stop triggered");
-    long currentTarget = motors[END_STOP_MOTOR_INDEX]->targetPosition();
     ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
-    motors[END_STOP_MOTOR_INDEX]->setCurrentPosition(0);
-    motors[END_STOP_MOTOR_INDEX]->move(-currentTarget);
+    motors[END_STOP_MOTOR_INDEX]->spin(motorSpeeds[END_STOP_MOTOR_INDEX]*ELEVATOR_DIRECTION);
     END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
   }
 }
