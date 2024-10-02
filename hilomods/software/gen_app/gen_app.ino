@@ -156,22 +156,24 @@ void stopMachine() {
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     ContinuousStepper<StepperDriver>* motor = motors[i];
     motor->stop();
+    motor->powerOff();
   }  
   setSteppersEnabled(false);
 }
 
 void startMachine() {
   Serial.println("Starting machine");
+  setSteppersEnabled(true);
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     int motorSpeed = motorSpeeds[i] * MOTOR_DIR;
     if (i == END_STOP_MOTOR_INDEX) {
       motorSpeed = motorSpeed * ELEVATOR_DIRECTION;
     }
+    motors[i]->powerOn();
     motors[i]->spin(motorSpeed);
   }
   printMachineSettings(); 
-  IS_RUNNING = true;
-  setSteppersEnabled(true);
+  IS_RUNNING = true; 
 }
 
 void runMachineLoop() {
@@ -216,6 +218,7 @@ void setupEndStops() {
   pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
   // Not needed at the moment.
   //pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
+  pinMode(PIN_END_STOP_Y_MIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
   //attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
 }
