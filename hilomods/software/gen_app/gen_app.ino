@@ -31,8 +31,6 @@
 #define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
-signed long MAX_TARGET_POSITION = 10000000;
-
 const int MOTORS_NUMBER = 5;
 int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
 
@@ -55,6 +53,15 @@ int END_STOP_MOTOR_INDEX = 4;
 
 // Motor direction
 signed long MOTOR_DIR = 1;
+
+// Variables for measuring run of delivery
+int DELIVERY_MOTOR_INDEX = 4;
+float DELIVERY_MOTOR_DIAMETER_MM = 30.0f;
+float DELIVERY_MOTOR_MICRO_STEPS = 8.0f;
+int RUN_START_MILLIS = 0;
+float CURRENT_RUN_STEPS = 0.0f;
+float CURRENT_RUN_DISTANCE = 0.0f; // Should always be set with CURRENT_RUN_STEPS
+char CURRENT_RUN_DISTANCE_STRING[10] = "0";
 
 ContinuousStepper<StepperDriver> motor1;
 ContinuousStepper<StepperDriver> motor2;
@@ -152,6 +159,8 @@ boolean startStopMachine() {
 
 void stopMachine() {
   Serial.println("Stopping machine");
+  unsigned long currentMillis = millis();
+  updateCurrentRunSteps(currentMillis);
   IS_RUNNING = false;
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     ContinuousStepper<StepperDriver>* motor = motors[i];
@@ -163,6 +172,8 @@ void stopMachine() {
 
 void startMachine() {
   Serial.println("Starting machine");
+  unsigned long currentMillis = millis();
+  RUN_START_MILLIS = currentMillis;
   setSteppersEnabled(true);
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     int motorSpeed = motorSpeeds[i] * MOTOR_DIR;
@@ -243,4 +254,14 @@ void startStopBySwitchTrigger() {
       startStopMachine();
     }
   }
+}
+
+void updateCurrentRunSteps(unsigned long stopMillis) {
+  int runTime = (stopMillis - RUN_START_MILLIS);
+  float speed = float(motorSpeeds[DELIVERY_MOTOR_INDEX]);
+  float totalSteps = ((float(runTime) / 1000.0f) * speed) / DELIVERY_MOTOR_MICRO_STEPS;
+  CURRENT_RUN_STEPS = float(abs(totalSteps));
+  CURRENT_RUN_DISTANCE = ((3.14f * (DELIVERY_MOTOR_DIAMETER_MM / 1000.0f)) / 360.0f) * 1.8 * CURRENT_RUN_STEPS;
+  dtostrf(CURRENT_RUN_DISTANCE, 6, 2, CURRENT_RUN_DISTANCE_STRING);
+  RUN_START_MILLIS = 0;
 }
