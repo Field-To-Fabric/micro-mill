@@ -31,6 +31,10 @@
 #define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
+// SD Card pins
+#define SD_DETECT_PIN   49  
+#define SDSS            53
+
 const int MOTORS_NUMBER = 5;
 int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
 
@@ -55,13 +59,15 @@ int END_STOP_MOTOR_INDEX = 4;
 signed long MOTOR_DIR = 1;
 
 // Variables for measuring run of delivery
+// Without any microstepping.
+int STEPS_PER_REVOLUTION = 200;
 int DELIVERY_MOTOR_INDEX = 4;
-float DELIVERY_MOTOR_DIAMETER_MM = 30.0f;
-float DELIVERY_MOTOR_MICRO_STEPS = 8.0f;
-int RUN_START_MILLIS = 0;
-float CURRENT_RUN_STEPS = 0.0f;
-float CURRENT_RUN_DISTANCE = 0.0f; // Should always be set with CURRENT_RUN_STEPS
-char CURRENT_RUN_DISTANCE_STRING[10] = "0";
+int DELIVERY_MOTOR_DIAMETER_MM = 30;
+int DELIVERY_MOTOR_MICRO_STEPS = 8;
+unsigned long RUN_START_MILLIS = 0;
+int CURRENT_RUN_STEPS = 0;
+float CURRENT_RUN_DISTANCE = 0;
+char CURRENT_RUN_DISTANCE_STRING[11] = "0";
 
 ContinuousStepper<StepperDriver> motor1;
 ContinuousStepper<StepperDriver> motor2;
@@ -257,11 +263,36 @@ void startStopBySwitchTrigger() {
 }
 
 void updateCurrentRunSteps(unsigned long stopMillis) {
-  int runTime = (stopMillis - RUN_START_MILLIS);
-  float speed = float(motorSpeeds[DELIVERY_MOTOR_INDEX]);
-  float totalSteps = ((float(runTime) / 1000.0f) * speed) / DELIVERY_MOTOR_MICRO_STEPS;
-  CURRENT_RUN_STEPS = float(abs(totalSteps));
-  CURRENT_RUN_DISTANCE = ((3.14f * (DELIVERY_MOTOR_DIAMETER_MM / 1000.0f)) / 360.0f) * 1.8 * CURRENT_RUN_STEPS;
-  dtostrf(CURRENT_RUN_DISTANCE, 6, 2, CURRENT_RUN_DISTANCE_STRING);
-  RUN_START_MILLIS = 0;
+  long runTimeMillis = (stopMillis - RUN_START_MILLIS);
+  Serial.println(stopMillis);
+  Serial.println(RUN_START_MILLIS);
+  Serial.println(runTimeMillis);
+  int speed = motorSpeeds[DELIVERY_MOTOR_INDEX];
+  Serial.println(speed);
+  int effectiveStepsPerRevolution = STEPS_PER_REVOLUTION * DELIVERY_MOTOR_MICRO_STEPS;
+   Serial.println("effective steps");
+  Serial.println(effectiveStepsPerRevolution);
+  int revolutionDistanceMM = M_PI * DELIVERY_MOTOR_DIAMETER_MM;
+  Serial.println(revolutionDistanceMM);
+  long numberOfSteps_scale1000 = runTimeMillis * speed;
+  Serial.println("Number of steps scaled");
+  Serial.println(numberOfSteps_scale1000);
+  long numberOfFullRevolutions_scale1000 = numberOfSteps_scale1000 / effectiveStepsPerRevolution;
+  Serial.println("full revolutions scaled");
+  Serial.println(numberOfFullRevolutions_scale1000);
+  long totalRevolutionDistanceMM_scale1000 = numberOfFullRevolutions_scale1000 * revolutionDistanceMM;
+  Serial.println("total revolution distance MM");
+  long totalRevolutionDistanceMM = totalRevolutionDistanceMM_scale1000 / 1000;
+  Serial.println(totalRevolutionDistanceMM);
+  long stepsRemainder = (numberOfSteps_scale1000 / 1000) % effectiveStepsPerRevolution;
+  Serial.println("steps remainder");
+  Serial.println(stepsRemainder);
+  float totalRemainderDistanceMM = stepsRemainder * (float(revolutionDistanceMM) / float(effectiveStepsPerRevolution));
+  Serial.println("remainder distance");
+  Serial.println(totalRemainderDistanceMM);
+  long totalDistanceMM = totalRevolutionDistanceMM + totalRemainderDistanceMM;
+  long totalDistanceCM = totalDistanceMM / 10;
+  Serial.println(totalDistanceCM);
+  float CURRENT_RUN_DISTANCE = totalDistanceCM / 100.0f;
+  dtostrf(CURRENT_RUN_DISTANCE, -6, 1, CURRENT_RUN_DISTANCE_STRING);
 }
