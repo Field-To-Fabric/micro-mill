@@ -31,10 +31,6 @@
 #define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
-// SD Card pins
-#define SD_DETECT_PIN   49  
-#define SDSS            53
-
 const int MOTORS_NUMBER = 5;
 int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
 
@@ -42,6 +38,7 @@ float ACCELERATION = 500.00f;
 
 bool IS_RUNNING = false;
 bool ENABLE_END_STOPS = true;
+bool ENABLE_SD_CARD = false;
 
 
 // The end stop should not be triggered very frequently.
@@ -95,6 +92,10 @@ void setup() {
   setupScreenController();
   if (ENABLE_END_STOPS) {
     setupEndStops();
+  }
+  if (ENABLE_SD_CARD) {
+    setupSDCard();
+    loadSDSettings();
   }
   setSteppersEnabled(false);
 }
