@@ -1,4 +1,4 @@
-#include <AccelStepper.h>
+#include <ContinuousStepper.h>
 
 #define HILO_SERIAL_BAUDRATE 115200
 
@@ -31,24 +31,22 @@
 #define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
-signed long MAX_TARGET_POSITION = 10000000;
-
 const int MOTORS_NUMBER = 5;
 int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
 
 float ACCELERATION = 500.00f;
 
 bool IS_RUNNING = false;
+bool ENABLE_END_STOPS = true;
+bool ENABLE_SD_CARD = false;
 
 
 // The end stop should not be triggered very frequently.
 const long END_STOP_TRIGGER_INTERVAL = 5000; 
 const long SWITCH_START_STOP_INTERVAL = 1000; 
-const long MAX_POSITION_INTERVAL = 10000;
 // Marked volatile as these are modified from an interrupt method.
 volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
 volatile unsigned long SWITCH_START_STOP_LAST = 0;
-unsigned long MAX_POSITION_INTERVAL_LAST = 0;
 volatile signed int ELEVATOR_DIRECTION = 1;
 
 // Which motor should be triggered by the end stop.
@@ -57,13 +55,24 @@ int END_STOP_MOTOR_INDEX = 4;
 // Motor direction
 signed long MOTOR_DIR = 1;
 
-AccelStepper motor1(AccelStepper::DRIVER, PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
-AccelStepper motor2(AccelStepper::DRIVER, PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
-AccelStepper motor3(AccelStepper::DRIVER, PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
-AccelStepper motor4(AccelStepper::DRIVER, PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
-AccelStepper motor5(AccelStepper::DRIVER, PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR);
+// Variables for measuring run of delivery
+// Without any microstepping.
+int STEPS_PER_REVOLUTION = 200;
+int DELIVERY_MOTOR_INDEX = 4;
+int DELIVERY_MOTOR_DIAMETER_MM = 30;
+int DELIVERY_MOTOR_MICRO_STEPS = 8;
+unsigned long RUN_START_MILLIS = 0;
+int CURRENT_RUN_STEPS = 0;
+float CURRENT_RUN_DISTANCE = 0;
+char CURRENT_RUN_DISTANCE_STRING[11] = "0";
 
-AccelStepper* motors[MOTORS_NUMBER] = {
+ContinuousStepper<StepperDriver> motor1;
+ContinuousStepper<StepperDriver> motor2;
+ContinuousStepper<StepperDriver> motor3;
+ContinuousStepper<StepperDriver> motor4;
+ContinuousStepper<StepperDriver> motor5;
+
+ContinuousStepper<StepperDriver>* motors[MOTORS_NUMBER] = {
   & motor1,
   & motor2,
   & motor3,
@@ -79,16 +88,15 @@ void setup() {
   
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
-  
-  // set the mode for the stepper driver enable pins
-  pinMode (PIN_MOTOR_1_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_2_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_3_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_4_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_5_ENABLE, OUTPUT);
-
+  initMotors();
   setupScreenController();
-  setupEndStops();
+  if (ENABLE_END_STOPS) {
+    setupEndStops();
+  }
+  if (ENABLE_SD_CARD) {
+    setupSDCard();
+    loadSDSettings();
+  }
   setSteppersEnabled(false);
 }
 
@@ -96,7 +104,29 @@ void loop() {
   serialCommunicationLoop();
   screenControllerLoop();
   runMachineLoop();
-  startStopBySwitchTrigger();
+  if (ENABLE_END_STOPS) {
+    startStopBySwitchTrigger();
+  }
+}
+
+void initMotors() {
+  // set the mode for the stepper driver enable pins
+  pinMode (PIN_MOTOR_1_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_2_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_3_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_4_ENABLE, OUTPUT);
+  pinMode (PIN_MOTOR_5_ENABLE, OUTPUT);
+  
+  motor1.begin(PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
+  motor1.setEnablePin(PIN_MOTOR_1_ENABLE, LOW);
+  motor2.begin(PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
+  motor2.setEnablePin(PIN_MOTOR_2_ENABLE, LOW);
+  motor3.begin(PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
+  motor3.setEnablePin(PIN_MOTOR_3_ENABLE, LOW);
+  motor4.begin(PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
+  motor4.setEnablePin(PIN_MOTOR_4_ENABLE, LOW);
+  motor5.begin(PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR);
+  motor5.setEnablePin(PIN_MOTOR_5_ENABLE, LOW);
 }
 
 // This loops allows you to send commands to the machine through the Arduino Serial Monitor.
@@ -136,58 +166,40 @@ boolean startStopMachine() {
 
 void stopMachine() {
   Serial.println("Stopping machine");
+  unsigned long currentMillis = millis();
+  updateCurrentRunSteps(currentMillis);
   IS_RUNNING = false;
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-    AccelStepper* motor = motors[i];
+    ContinuousStepper<StepperDriver>* motor = motors[i];
     motor->stop();
-    motor->setCurrentPosition(0);
+    motor->powerOff();
   }  
   setSteppersEnabled(false);
 }
 
 void startMachine() {
   Serial.println("Starting machine");
-  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-    motors[i]->setCurrentPosition(0);
-    motors[i]->setMaxSpeed(motorSpeeds[i]);
-    motors[i]->setAcceleration(ACCELERATION);
-    int moveTarget = MAX_TARGET_POSITION * MOTOR_DIR;
-    if (i == END_STOP_MOTOR_INDEX) {
-      moveTarget = moveTarget * ELEVATOR_DIRECTION;
-    }
-    motors[i]->move(moveTarget);
-  }
-  printMachineSettings();
-  
-  IS_RUNNING = true;
-  MAX_POSITION_INTERVAL_LAST = millis();
+  unsigned long currentMillis = millis();
+  RUN_START_MILLIS = currentMillis;
   setSteppersEnabled(true);
+  for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+    int motorSpeed = motorSpeeds[i] * MOTOR_DIR;
+    if (i == END_STOP_MOTOR_INDEX) {
+      motorSpeed = motorSpeed * ELEVATOR_DIRECTION;
+    }
+    motors[i]->powerOn();
+    motors[i]->spin(motorSpeed);
+  }
+  printMachineSettings(); 
+  IS_RUNNING = true; 
 }
 
 void runMachineLoop() {
   if (IS_RUNNING) {
     for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-      AccelStepper* motor = motors[i];
-      motor->run();
+      ContinuousStepper<StepperDriver>* motor = motors[i];
+      motor->loop();
     }
-    // Check if any target positions need updating
-    const unsigned long currentMillis = millis();
-    if (currentMillis - MAX_POSITION_INTERVAL_LAST > MAX_POSITION_INTERVAL) {
-      for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-        AccelStepper* motor = motors[i];
-        long distanceToGo = motor->distanceToGo();
-        if (distanceToGo < 10000) {
-          motor->setCurrentPosition(0);
-          // Side effect is that speed gets set to 0 so we have to set that again
-          motor->setMaxSpeed(motorSpeeds[i]);
-          motor->setAcceleration(10000.00f);
-          int moveTarget = MAX_TARGET_POSITION * MOTOR_DIR;
-          motor->move(moveTarget);
-          motor->run();
-        }
-      }
-      MAX_POSITION_INTERVAL_LAST = currentMillis;
-    };
   }
 } 
 
@@ -226,17 +238,15 @@ void setupEndStops() {
   //pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
   pinMode(PIN_END_STOP_Y_MIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
-  attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
+  //attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
 }
 
 void endStopTrigger() {
   const unsigned long currentMillis = millis();
   if (currentMillis > (END_STOP_TRIGGER_MILLIS_LAST + END_STOP_TRIGGER_INTERVAL)) {
     Serial.println("End stop triggered");
-    long currentTarget = motors[END_STOP_MOTOR_INDEX]->targetPosition();
     ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
-    motors[END_STOP_MOTOR_INDEX]->setCurrentPosition(0);
-    motors[END_STOP_MOTOR_INDEX]->move(-currentTarget);
+    motors[END_STOP_MOTOR_INDEX]->spin(motorSpeeds[END_STOP_MOTOR_INDEX]*ELEVATOR_DIRECTION);
     END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
   }
 }
@@ -251,4 +261,39 @@ void startStopBySwitchTrigger() {
       startStopMachine();
     }
   }
+}
+
+void updateCurrentRunSteps(unsigned long stopMillis) {
+  long runTimeMillis = (stopMillis - RUN_START_MILLIS);
+  Serial.println(stopMillis);
+  Serial.println(RUN_START_MILLIS);
+  Serial.println(runTimeMillis);
+  int speed = motorSpeeds[DELIVERY_MOTOR_INDEX];
+  Serial.println(speed);
+  int effectiveStepsPerRevolution = STEPS_PER_REVOLUTION * DELIVERY_MOTOR_MICRO_STEPS;
+   Serial.println("effective steps");
+  Serial.println(effectiveStepsPerRevolution);
+  int revolutionDistanceMM = M_PI * DELIVERY_MOTOR_DIAMETER_MM;
+  Serial.println(revolutionDistanceMM);
+  long numberOfSteps_scale1000 = runTimeMillis * speed;
+  Serial.println("Number of steps scaled");
+  Serial.println(numberOfSteps_scale1000);
+  long numberOfFullRevolutions_scale1000 = numberOfSteps_scale1000 / effectiveStepsPerRevolution;
+  Serial.println("full revolutions scaled");
+  Serial.println(numberOfFullRevolutions_scale1000);
+  long totalRevolutionDistanceMM_scale1000 = numberOfFullRevolutions_scale1000 * revolutionDistanceMM;
+  Serial.println("total revolution distance MM");
+  long totalRevolutionDistanceMM = totalRevolutionDistanceMM_scale1000 / 1000;
+  Serial.println(totalRevolutionDistanceMM);
+  long stepsRemainder = (numberOfSteps_scale1000 / 1000) % effectiveStepsPerRevolution;
+  Serial.println("steps remainder");
+  Serial.println(stepsRemainder);
+  float totalRemainderDistanceMM = stepsRemainder * (float(revolutionDistanceMM) / float(effectiveStepsPerRevolution));
+  Serial.println("remainder distance");
+  Serial.println(totalRemainderDistanceMM);
+  long totalDistanceMM = totalRevolutionDistanceMM + totalRemainderDistanceMM;
+  long totalDistanceCM = totalDistanceMM / 10;
+  Serial.println(totalDistanceCM);
+  float CURRENT_RUN_DISTANCE = totalDistanceCM / 100.0f;
+  dtostrf(CURRENT_RUN_DISTANCE, -6, 1, CURRENT_RUN_DISTANCE_STRING);
 }

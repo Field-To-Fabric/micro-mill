@@ -175,9 +175,10 @@ void drawHilo() {
   unsigned int w = u8g.getWidth();
   u8g.drawBox(0, 0, w, h+2);
   u8g.setDefaultBackgroundColor();
-  u8g.drawStr(2, 8, "Hallo Hilo!");
+  u8g.drawStr(2, 8, "Hallo Hilo!         Run:");
+  // Draw the current run value:
+  u8g.drawStr(95, 8, CURRENT_RUN_DISTANCE_STRING);
   u8g.setDefaultForegroundColor();
-  
   int i;
   int s = 2;
   for( i = 0; i < MENU_ITEMS_NUMBER; i++ ) {
