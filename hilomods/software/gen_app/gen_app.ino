@@ -32,14 +32,20 @@
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
 const int MOTORS_NUMBER = 5;
-int motorSpeeds[MOTORS_NUMBER] = {0, 0, 0, 0, 0};
+int m0Speed = 0;
+int m1Speed = 0;
+int m2Speed = 0;
+int m3Speed = 0;
+int m4Speed = 0;
 
-float ACCELERATION = 500.00f;
+int motorSpeeds[MOTORS_NUMBER] = {& m0Speed, & m1Speed, & m2Speed, & m3Speed, & m4Speed};
 
 bool IS_RUNNING = false;
 bool ENABLE_END_STOPS = true;
-bool ENABLE_SD_CARD = false;
-
+bool ENABLE_SD_CARD = true;
+// When enabled, the start/stop signal will be sent through Serial1, so that it
+// can be picked up by a second arduino board.
+bool ENABLE_ARDUINO_2 = false;
 
 // The end stop should not be triggered very frequently.
 const long END_STOP_TRIGGER_INTERVAL = 5000; 
@@ -83,7 +89,7 @@ ContinuousStepper<StepperDriver>* motors[MOTORS_NUMBER] = {
 
 void setup() {
   Serial.begin(HILO_SERIAL_BAUDRATE);
-  
+  Serial1.begin(HILO_SERIAL_BAUDRATE);
   Serial.println("Starting up...");
   
   pinMode(PIN_LED, OUTPUT);
@@ -102,6 +108,9 @@ void setup() {
 
 void loop() {
   serialCommunicationLoop();
+  if (ENABLE_ARDUINO_2){
+    serial1CommunicationLoop(); 
+  }
   screenControllerLoop();
   runMachineLoop();
   if (ENABLE_END_STOPS) {
@@ -142,11 +151,7 @@ void serialCommunicationLoop() {
     if (data.startsWith("m")) {
       int motor = data.substring(1,2).toInt();
       int motorSpeed = data.substring(2).toInt();
-      motorSpeeds[motor] = motorSpeed;
-      Serial.print("Set motor ");
-      Serial.print(motor);
-      Serial.print(" to ");
-      Serial.println(motorSpeed);
+      setMotorSpeed(motor, motorSpeed);
     }
     if (data.startsWith("R")) {
       Serial.println("Reversion motor direction");
@@ -155,11 +160,21 @@ void serialCommunicationLoop() {
   }
 }
 
+void serial1CommunicationLoop() {
+  if (Serial1.available() > 0) {
+    // read a character from serial, if one is available
+    String data = Serial1.readStringUntil('\n');
+    Serial.print("Received on serial 1");
+    Serial.println(data);
+  }
+}
+
 boolean startStopMachine() {
   if (IS_RUNNING) {
     stopMachine();
   } else {
     startMachine();
+    storeSDSettings();
   }
   return IS_RUNNING;
 }
@@ -183,7 +198,8 @@ void startMachine() {
   RUN_START_MILLIS = currentMillis;
   setSteppersEnabled(true);
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
-    int motorSpeed = motorSpeeds[i] * MOTOR_DIR;
+    int *currentSpeed = motorSpeeds[i];
+    int motorSpeed = *currentSpeed * MOTOR_DIR;
     if (i == END_STOP_MOTOR_INDEX) {
       motorSpeed = motorSpeed * ELEVATOR_DIRECTION;
     }
@@ -218,17 +234,26 @@ void setSteppersEnabled(bool enabled) {
 
 void printMachineSettings() {
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
+    int *motorSpeed = motorSpeeds[i];
     Serial.print("Motor ");
     Serial.print(i);
     Serial.print(" ");
-    Serial.println(motorSpeeds[i]);
+    Serial.println(*motorSpeed);
   }
 }
 
+void setMotorSpeed(int motorNumber, int newMotorSpeed) {
+  int *motorSpeed = motorSpeeds[motorNumber];
+  *motorSpeed = newMotorSpeed;
+  Serial.print("Set motor ");
+  Serial.print(motorNumber);
+  Serial.print(" to ");
+  Serial.println(newMotorSpeed);
+}
+
 int incrementMotorSpeed(int motorNumber, int direction) {
-  int speed = motorSpeeds[motorNumber];
-  speed = speed + 25 * direction;
-  motorSpeeds[motorNumber] = speed;
+  int *speed = motorSpeeds[motorNumber];
+  *speed = *speed + 25 * direction;
   return speed;
 }
 
@@ -265,35 +290,17 @@ void startStopBySwitchTrigger() {
 
 void updateCurrentRunSteps(unsigned long stopMillis) {
   long runTimeMillis = (stopMillis - RUN_START_MILLIS);
-  Serial.println(stopMillis);
-  Serial.println(RUN_START_MILLIS);
-  Serial.println(runTimeMillis);
-  int speed = motorSpeeds[DELIVERY_MOTOR_INDEX];
-  Serial.println(speed);
+  int *speed = motorSpeeds[DELIVERY_MOTOR_INDEX];
   int effectiveStepsPerRevolution = STEPS_PER_REVOLUTION * DELIVERY_MOTOR_MICRO_STEPS;
-   Serial.println("effective steps");
-  Serial.println(effectiveStepsPerRevolution);
   int revolutionDistanceMM = M_PI * DELIVERY_MOTOR_DIAMETER_MM;
-  Serial.println(revolutionDistanceMM);
-  long numberOfSteps_scale1000 = runTimeMillis * speed;
-  Serial.println("Number of steps scaled");
-  Serial.println(numberOfSteps_scale1000);
+  long numberOfSteps_scale1000 = runTimeMillis * *speed;
   long numberOfFullRevolutions_scale1000 = numberOfSteps_scale1000 / effectiveStepsPerRevolution;
-  Serial.println("full revolutions scaled");
-  Serial.println(numberOfFullRevolutions_scale1000);
   long totalRevolutionDistanceMM_scale1000 = numberOfFullRevolutions_scale1000 * revolutionDistanceMM;
-  Serial.println("total revolution distance MM");
   long totalRevolutionDistanceMM = totalRevolutionDistanceMM_scale1000 / 1000;
-  Serial.println(totalRevolutionDistanceMM);
   long stepsRemainder = (numberOfSteps_scale1000 / 1000) % effectiveStepsPerRevolution;
-  Serial.println("steps remainder");
-  Serial.println(stepsRemainder);
   float totalRemainderDistanceMM = stepsRemainder * (float(revolutionDistanceMM) / float(effectiveStepsPerRevolution));
-  Serial.println("remainder distance");
-  Serial.println(totalRemainderDistanceMM);
   long totalDistanceMM = totalRevolutionDistanceMM + totalRemainderDistanceMM;
   long totalDistanceCM = totalDistanceMM / 10;
-  Serial.println(totalDistanceCM);
   float CURRENT_RUN_DISTANCE = totalDistanceCM / 100.0f;
   dtostrf(CURRENT_RUN_DISTANCE, -6, 1, CURRENT_RUN_DISTANCE_STRING);
 }

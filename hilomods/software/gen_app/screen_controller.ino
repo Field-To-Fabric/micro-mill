@@ -36,17 +36,17 @@ unsigned long HILO_START_STOP_LAST_MILLIS = 0;  //Last time we check for start/s
 struct MenuLine {
   char name[10];
   int values;
-  int *value1;
-  char *value2;
+  int* value1;
+  char* value2;
 };
 
 const int MENU_ITEMS_NUMBER = MOTORS_NUMBER + 1;
 MenuLine menuItems[MENU_ITEMS_NUMBER] = { 
-  { "Motor 1",  1, motorSpeeds[0] },
-  { "Motor 2",  1, motorSpeeds[1] },
-  { "Motor 3",  1, motorSpeeds[2] },
-  { "Motor 4",  1, motorSpeeds[3] },
-  { "Motor 5",  1, motorSpeeds[4] },
+  { "Motor 1",  1, motorSpeeds[0], NULL },
+  { "Motor 2",  1, motorSpeeds[1], NULL },
+  { "Motor 3",  1, motorSpeeds[2], NULL },
+  { "Motor 4",  1, motorSpeeds[3], NULL },
+  { "Motor 5",  1, motorSpeeds[4], NULL },
   { "Start", 0 }
 };
 
@@ -115,7 +115,7 @@ void updateMenuValue() {
     // Nothing to do.
     return;
   }
-  menuItems[menuLinePos].value1 = incrementMotorSpeed(menuLinePos, ENCODER_CHANGE);
+  incrementMotorSpeed(menuLinePos, ENCODER_CHANGE);
 }
 
 int getMenuLineItemValues() {
@@ -227,12 +227,12 @@ void drawMenuLine( struct MenuLine menuItem, int i, int s, int h, int w) {
     u8g.drawStr( 2, (i+s)*TEXT_HEIGHT, menuItem.name);
     if (menuItem.values > 0) {
        char value1[4];
-       sprintf (value1, "%d", menuItem.value1);
+       sprintf (value1, "%d", *menuItem.value1);
        u8g.drawStr( 78, (i+s)*TEXT_HEIGHT, value1);
     }
     if (menuItem.values > 1) {
        char value2[1];
-       sprintf (value2, "%c", menuItem.value2);
+       sprintf (value2, "%c", *menuItem.value2);
        u8g.drawStr( 110, (i+s)*TEXT_HEIGHT, value2);
     }
   } else {
@@ -243,8 +243,8 @@ void drawMenuLine( struct MenuLine menuItem, int i, int s, int h, int w) {
       u8g.drawStr( 2, (i+s)*TEXT_HEIGHT, menuItem.name);
       if (menuItem.values > 0) {
         char value1[4];
-        sprintf (value1, "%d", menuItem.value1);
-        int boxWidth = 6 * getNumberLength(menuItem.value1);
+        sprintf (value1, "%d", *menuItem.value1);
+        int boxWidth = 6 * getNumberLength(*menuItem.value1);
         if (menuLineSelected && menuLineItemPos == 0) {      
           u8g.setDefaultForegroundColor();  
           u8g.drawBox(78, ((i+s)*TEXT_HEIGHT-h), boxWidth, h+2);
@@ -254,7 +254,7 @@ void drawMenuLine( struct MenuLine menuItem, int i, int s, int h, int w) {
       }
       if (menuItem.values > 1) {
         char value2[1];
-        sprintf (value2, "%c", menuItem.value2);
+        sprintf (value2, "%c", *menuItem.value2);
         if (menuLineSelected && menuLineItemPos == 1) {
           u8g.setDefaultForegroundColor(); 
           u8g.drawBox(110, ((i+s)*TEXT_HEIGHT-h), 10, h+2);
