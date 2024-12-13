@@ -70,7 +70,6 @@ int DELIVERY_MOTOR_MICRO_STEPS = 8;
 unsigned long RUN_START_MILLIS = 0;
 int CURRENT_RUN_STEPS = 0;
 float CURRENT_RUN_DISTANCE = 0;
-char CURRENT_RUN_DISTANCE_STRING[11] = "0";
 
 ContinuousStepper<StepperDriver> motor1;
 ContinuousStepper<StepperDriver> motor2;
@@ -301,6 +300,9 @@ void updateCurrentRunSteps(unsigned long stopMillis) {
   float totalRemainderDistanceMM = stepsRemainder * (float(revolutionDistanceMM) / float(effectiveStepsPerRevolution));
   long totalDistanceMM = totalRevolutionDistanceMM + totalRemainderDistanceMM;
   long totalDistanceCM = totalDistanceMM / 10;
-  float CURRENT_RUN_DISTANCE = totalDistanceCM / 100.0f;
-  dtostrf(CURRENT_RUN_DISTANCE, -6, 1, CURRENT_RUN_DISTANCE_STRING);
+  CURRENT_RUN_DISTANCE += totalDistanceCM / 100.0f;
+}
+
+void resetRunCounter() {
+  CURRENT_RUN_DISTANCE = 0;
 }

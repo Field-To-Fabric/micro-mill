@@ -40,14 +40,15 @@ struct MenuLine {
   char* value2;
 };
 
-const int MENU_ITEMS_NUMBER = MOTORS_NUMBER + 1;
+// Iterating through the options goes through all the menu items and all the control items.
+const int MENU_ITEMS_NUMBER = MOTORS_NUMBER;
+const int CONTROL_ITEMS_NUMBER = 3;
 MenuLine menuItems[MENU_ITEMS_NUMBER] = { 
   { "Motor 1",  1, motorSpeeds[0], NULL },
   { "Motor 2",  1, motorSpeeds[1], NULL },
   { "Motor 3",  1, motorSpeeds[2], NULL },
   { "Motor 4",  1, motorSpeeds[3], NULL },
-  { "Motor 5",  1, motorSpeeds[4], NULL },
-  { "Start", 0 }
+  { "Motor 5",  1, motorSpeeds[4], NULL }
 };
 
 boolean menuLineSelected = false;
@@ -104,7 +105,7 @@ void updateMenu() {
      if (menuLineSelected) {
        updateMenuValue();
      } else {
-      menuLinePos = abs(menuLinePos + ENCODER_CHANGE) % MENU_ITEMS_NUMBER;
+      menuLinePos = abs(menuLinePos + ENCODER_CHANGE) % (MENU_ITEMS_NUMBER + CONTROL_ITEMS_NUMBER);
      }
      ENCODER_CHANGE = 0;
   }
@@ -141,8 +142,13 @@ void encoderButtonTrigger() {
         menuLineItemPos = 0;
         menuLineSelected = false;
       }
-    } else if (menuLinePos == MENU_ITEMS_NUMBER - 1) {
+    } else if (menuLinePos - MENU_ITEMS_NUMBER == 0) {
       return toggleHilo();
+    } else if (menuLinePos - MENU_ITEMS_NUMBER == 1) {
+      return resetRunCounter();
+    } else if (menuLinePos - MENU_ITEMS_NUMBER == 2) {
+      // This does nothing for now.
+      return;
     } else {
         menuLineSelected = true;
     }
@@ -177,13 +183,16 @@ void drawHilo() {
   u8g.setDefaultBackgroundColor();
   u8g.drawStr(2, 8, "Hallo Hilo!         Run:");
   // Draw the current run value:
+  char CURRENT_RUN_DISTANCE_STRING[11];
+  dtostrf(CURRENT_RUN_DISTANCE, -6, 1, CURRENT_RUN_DISTANCE_STRING);
   u8g.drawStr(95, 8, CURRENT_RUN_DISTANCE_STRING);
   u8g.setDefaultForegroundColor();
   int i;
   int s = 2;
   for( i = 0; i < MENU_ITEMS_NUMBER; i++ ) {
     drawMenuLine(menuItems[i], i, s, h, w);
-  }  
+  }
+  drawControlMenu(i, s, h, w);
 }
 
 void toggleHilo() {
@@ -265,6 +274,23 @@ void drawMenuLine( struct MenuLine menuItem, int i, int s, int h, int w) {
         u8g.drawStr(110, (i+s)*TEXT_HEIGHT, value2);
       }
   }
+}
+
+void drawControlMenu(int i, int s, int h, int w) {
+  drawControlMenuItem("START", 0, i, s, h, w);
+  drawControlMenuItem("RESET", 1, i, s, h, w);
+  drawControlMenuItem("NEXT", 2, i, s, h, w);
+}
+
+void drawControlMenuItem(char controlName[10], int controlPos, int i, int s, int h, int w) {
+  u8g.setDefaultForegroundColor();
+  int start = controlPos * 40;
+  if (menuLinePos - MENU_ITEMS_NUMBER == controlPos) {      
+    u8g.setDefaultForegroundColor();
+    u8g.drawBox(start, ((i+s)*TEXT_HEIGHT-h), 30, h+2);
+    u8g.setDefaultBackgroundColor();
+   }
+  u8g.drawStr( start, (i+s)*TEXT_HEIGHT, controlName);
 }
 
 int getNumberLength(int n) {
