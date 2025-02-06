@@ -86,6 +86,7 @@ void storeSDSettings() {
   for (int i = 0; i < MOTORS_NUMBER; i++) {
     printMotorSettings(i,motorSpeeds[i]);
   }
+  printCurrentRunDistance();
   settingsFile.close();
 }
 
@@ -94,6 +95,14 @@ void printMotorSettings(int motorIndex, int* speed) {
   settingsFile.print(motorIndex, 10);
   settingsFile.print(":");
   settingsFile.println(*speed, 10);
+}
+
+void printCurrentRunDistance() {
+  char CURRENT_RUN_DISTANCE_STRING[11];
+  dtostrf(CURRENT_RUN_DISTANCE, -6, 1, CURRENT_RUN_DISTANCE_STRING);
+  settingsFile.print("d");
+  settingsFile.print(":");
+  settingsFile.println(CURRENT_RUN_DISTANCE_STRING);
 }
 
 void parseSettingsFile() {
@@ -133,6 +142,14 @@ bool parseLine(char* str) {
     if (str == NULL) return false;
     int motorSpeed = atoi(str);
     setMotorSpeed(motor, motorSpeed);
+    return true;
+  }
+  if (str[0] == 'd') {
+    // Get the next part.
+    str = strtok(NULL, ":");
+    if (str == NULL) return false;
+    float distance = atof(str);
+    setCurrentRunDistance(distance);
     return true;
   }
   debugln("Setting not recognized");

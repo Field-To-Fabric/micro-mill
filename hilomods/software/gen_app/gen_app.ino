@@ -3,7 +3,7 @@
 #define HILO_SERIAL_BAUDRATE 115200
 
 // Set to true when connected to a serial output (when the arduino is connected to the computer).
-#define DEBUG_ENABLED true
+#define DEBUG_ENABLED false
 
 #define PIN_LED               13  // Arduino on-board LED
 
@@ -199,6 +199,7 @@ void serial1CommunicationLoop() {
 boolean startStopMachine() {
   if (IS_RUNNING) {
     stopMachine();
+    storeSDSettings();
   } else {
     startMachine();
     storeSDSettings();
@@ -359,6 +360,11 @@ void updateCurrentRunSteps(unsigned long stopMillis) {
   long totalDistanceMM = totalRevolutionDistanceMM + totalRemainderDistanceMM;
   long totalDistanceCM = totalDistanceMM / 10;
   CURRENT_RUN_DISTANCE += totalDistanceCM / 100.0f;
+}
+
+void setCurrentRunDistance(float distance) {
+  debugln("Setting current run distance");
+  CURRENT_RUN_DISTANCE = distance;
 }
 
 void resetRunCounter() {
