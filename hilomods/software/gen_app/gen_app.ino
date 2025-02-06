@@ -2,6 +2,9 @@
 
 #define HILO_SERIAL_BAUDRATE 115200
 
+// Set to true when connected to a serial output (when the arduino is connected to the computer).
+#define DEBUG_ENABLED true
+
 #define PIN_LED               13  // Arduino on-board LED
 
 #define PIN_MOTOR_1_STEP     54  // Motor 1 Step Pin
@@ -31,6 +34,23 @@
 #define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
+// Enable/Disable Features
+#define ENABLE_END_STOPS false
+#define ENABLE_START_STOP_TRIGGER false
+#define ENABLE_SD_CARD true
+// Connect a sensor using an optocoupler, connect to the endstop pins. Wire G (opto) to - and V1 (opto) to S.
+#define ENABLE_YARN_BREAK_DETECTION false
+// When enabled, the start/stop signal will be sent through Serial1, so that it
+// can be picked up by a second arduino board.
+#define ENABLE_ARDUINO_2 false
+
+
+// Settings that enable length computation
+#define STEPS_PER_REVOLUTION 200
+#define DELIVERY_MOTOR_INDEX 4
+#define DELIVERY_MOTOR_DIAMETER_MM 30
+#define DELIVERY_MOTOR_MICRO_STEPS 8
+
 const int MOTORS_NUMBER = 5;
 int m0Speed = 0;
 int m1Speed = 0;
@@ -41,19 +61,19 @@ int m4Speed = 0;
 int motorSpeeds[MOTORS_NUMBER] = {& m0Speed, & m1Speed, & m2Speed, & m3Speed, & m4Speed};
 
 bool IS_RUNNING = false;
-bool ENABLE_END_STOPS = true;
-bool ENABLE_SD_CARD = true;
-// When enabled, the start/stop signal will be sent through Serial1, so that it
-// can be picked up by a second arduino board.
-bool ENABLE_ARDUINO_2 = false;
 
 // The end stop should not be triggered very frequently.
-const long END_STOP_TRIGGER_INTERVAL = 5000; 
+const long END_STOP_TRIGGER_INTERVAL = 2000; 
 const long SWITCH_START_STOP_INTERVAL = 1000; 
 // Marked volatile as these are modified from an interrupt method.
 volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
-volatile unsigned long SWITCH_START_STOP_LAST = 0;
 volatile signed int ELEVATOR_DIRECTION = 1;
+unsigned long SWITCH_START_STOP_POLL_LAST = 0;
+
+// Yarn break detection state
+const long YARN_BREAK_POLL_INTERVAL = 1500;
+long YARN_BREAK_POLL_LAST = 0;
+long YARN_BREAK_DETECTED_LAST = 0;
 
 // Which motor should be triggered by the end stop.
 int END_STOP_MOTOR_INDEX = 4;
@@ -61,12 +81,7 @@ int END_STOP_MOTOR_INDEX = 4;
 // Motor direction
 signed long MOTOR_DIR = 1;
 
-// Variables for measuring run of delivery
-// Without any microstepping.
-int STEPS_PER_REVOLUTION = 200;
-int DELIVERY_MOTOR_INDEX = 4;
-int DELIVERY_MOTOR_DIAMETER_MM = 30;
-int DELIVERY_MOTOR_MICRO_STEPS = 8;
+// State for computing length of run
 unsigned long RUN_START_MILLIS = 0;
 int CURRENT_RUN_STEPS = 0;
 float CURRENT_RUN_DISTANCE = 0;
@@ -87,9 +102,13 @@ ContinuousStepper<StepperDriver>* motors[MOTORS_NUMBER] = {
 
 
 void setup() {
-  Serial.begin(HILO_SERIAL_BAUDRATE);
-  Serial1.begin(HILO_SERIAL_BAUDRATE);
-  Serial.println("Starting up...");
+  if (DEBUG_ENABLED) {
+    Serial.begin(HILO_SERIAL_BAUDRATE); 
+  }
+  if (ENABLE_ARDUINO_2) {
+    Serial1.begin(HILO_SERIAL_BAUDRATE); 
+  }
+  debugln("Starting up...");
   
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
@@ -98,9 +117,15 @@ void setup() {
   if (ENABLE_END_STOPS) {
     setupEndStops();
   }
+  if (ENABLE_START_STOP_TRIGGER) {
+    setupStartStopTrigger();
+  }
   if (ENABLE_SD_CARD) {
     setupSDCard();
     loadSDSettings();
+  }
+  if (ENABLE_YARN_BREAK_DETECTION) {
+    setupYarnBreakDetection();
   }
   setSteppersEnabled(false);
 }
@@ -112,8 +137,11 @@ void loop() {
   }
   screenControllerLoop();
   runMachineLoop();
-  if (ENABLE_END_STOPS) {
+  if (ENABLE_START_STOP_TRIGGER) {
     startStopBySwitchTrigger();
+  }
+  if (ENABLE_YARN_BREAK_DETECTION) {
+    yarnBreakTrigger();
   }
 }
 
@@ -142,8 +170,8 @@ void serialCommunicationLoop() {
   if (Serial.available() > 0) {
     // read a character from serial, if one is available
     String data = Serial.readStringUntil('\n');
-    Serial.print("Received ");
-    Serial.println(data);
+    debug("Received ");
+    debugln(data);
     if (data == " ") {
       startStopMachine();
     }
@@ -153,7 +181,7 @@ void serialCommunicationLoop() {
       setMotorSpeed(motor, motorSpeed);
     }
     if (data.startsWith("R")) {
-      Serial.println("Reversion motor direction");
+      debugln("Reversion motor direction");
       MOTOR_DIR = -MOTOR_DIR;
     }
   }
@@ -163,8 +191,8 @@ void serial1CommunicationLoop() {
   if (Serial1.available() > 0) {
     // read a character from serial, if one is available
     String data = Serial1.readStringUntil('\n');
-    Serial.print("Received on serial 1");
-    Serial.println(data);
+    debug("Received on serial 1");
+    debugln(data);
   }
 }
 
@@ -179,7 +207,7 @@ boolean startStopMachine() {
 }
 
 void stopMachine() {
-  Serial.println("Stopping machine");
+  debugln("Stopping machine");
   unsigned long currentMillis = millis();
   updateCurrentRunSteps(currentMillis);
   IS_RUNNING = false;
@@ -192,7 +220,7 @@ void stopMachine() {
 }
 
 void startMachine() {
-  Serial.println("Starting machine");
+  debugln("Starting machine");
   unsigned long currentMillis = millis();
   RUN_START_MILLIS = currentMillis;
   setSteppersEnabled(true);
@@ -234,20 +262,20 @@ void setSteppersEnabled(bool enabled) {
 void printMachineSettings() {
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     int *motorSpeed = motorSpeeds[i];
-    Serial.print("Motor ");
-    Serial.print(i);
-    Serial.print(" ");
-    Serial.println(*motorSpeed);
+    debug("Motor ");
+    debug(i);
+    debug(" ");
+    debugln(*motorSpeed);
   }
 }
 
 void setMotorSpeed(int motorNumber, int newMotorSpeed) {
   int *motorSpeed = motorSpeeds[motorNumber];
   *motorSpeed = newMotorSpeed;
-  Serial.print("Set motor ");
-  Serial.print(motorNumber);
-  Serial.print(" to ");
-  Serial.println(newMotorSpeed);
+  debug("Set motor ");
+  debug(motorNumber);
+  debug(" to ");
+  debugln(newMotorSpeed);
 }
 
 int incrementMotorSpeed(int motorNumber, int direction) {
@@ -257,18 +285,25 @@ int incrementMotorSpeed(int motorNumber, int direction) {
 }
 
 void setupEndStops() {
-  pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
   // Not needed at the moment.
   //pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
-  pinMode(PIN_END_STOP_Y_MIN, INPUT_PULLUP);
+  pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
   //attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
+}
+
+void setupStartStopTrigger() {
+  pinMode(PIN_END_STOP_Y_MIN, INPUT_PULLUP); 
+}
+
+void setupYarnBreakDetection() {
+  pinMode(PIN_END_STOP_Z_MIN, INPUT_PULLUP);
 }
 
 void endStopTrigger() {
   const unsigned long currentMillis = millis();
   if (currentMillis > (END_STOP_TRIGGER_MILLIS_LAST + END_STOP_TRIGGER_INTERVAL)) {
-    Serial.println("End stop triggered");
+    debugln("End stop triggered");
     ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
     motors[END_STOP_MOTOR_INDEX]->spin(motorSpeeds[END_STOP_MOTOR_INDEX]*ELEVATOR_DIRECTION);
     END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
@@ -276,13 +311,36 @@ void endStopTrigger() {
 }
 
 void startStopBySwitchTrigger() {
-  int triggered = digitalRead(PIN_END_STOP_Y_MIN);
   const unsigned long currentMillis = millis();
-  if (triggered == LOW) {
-    if (currentMillis > (SWITCH_START_STOP_LAST + SWITCH_START_STOP_INTERVAL)) {
-      Serial.println("Start/Stop endstop triggered");
-      SWITCH_START_STOP_LAST = currentMillis;
+  if (currentMillis > (SWITCH_START_STOP_POLL_LAST + SWITCH_START_STOP_INTERVAL)) {
+    // Lets poll
+    SWITCH_START_STOP_POLL_LAST = currentMillis;
+    int triggered = digitalRead(PIN_END_STOP_Y_MIN);
+    if (triggered == LOW) {
+      debugln("Start/Stop endstop triggered");
       startStopMachine();
+    }
+  }
+}
+
+void yarnBreakTrigger() {
+  if (!IS_RUNNING) {
+    // No need to run detection if the machine is not running.
+    return;
+  }
+  const unsigned long currentMillis = millis();
+  if (currentMillis > (YARN_BREAK_POLL_LAST + YARN_BREAK_POLL_INTERVAL)) {
+    // time to poll
+    YARN_BREAK_POLL_LAST = currentMillis;
+    int triggered = digitalRead(PIN_END_STOP_Z_MIN);
+    // When the yarn is there, the signal gets set to HIGH. A break occurs if we measure LOW three times in a row
+    if (triggered == LOW) {
+      if ((YARN_BREAK_DETECTED_LAST + (3 * YARN_BREAK_POLL_INTERVAL)) < currentMillis) {
+        debugln("Yarn Break Detected");
+        stopMachine();
+      }
+    } else {
+      YARN_BREAK_DETECTED_LAST = currentMillis;
     }
   }
 }
@@ -305,4 +363,40 @@ void updateCurrentRunSteps(unsigned long stopMillis) {
 
 void resetRunCounter() {
   CURRENT_RUN_DISTANCE = 0;
+}
+
+void debug(char* msg) {
+  if (DEBUG_ENABLED) {
+    Serial.print(msg);
+  }
+}
+
+void debugln(char* msg) {
+  if (DEBUG_ENABLED) {
+    Serial.println(msg);
+  }
+}
+
+void debug(String msg) {
+  if (DEBUG_ENABLED) {
+    Serial.print(msg);
+  }
+}
+
+void debugln(String msg) {
+  if (DEBUG_ENABLED) {
+    Serial.println(msg);
+  }
+}
+
+void debug(int msg) {
+  if (DEBUG_ENABLED) {
+    Serial.print(msg);
+  }
+}
+
+void debugln(int msg) {
+  if (DEBUG_ENABLED) {
+    Serial.println(msg);
+  }
 }

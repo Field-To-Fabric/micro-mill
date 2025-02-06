@@ -41,7 +41,7 @@ void setupSDCard() {
   digitalWrite(SD_DETECT_PIN, HIGH);
   SD_CONNECTED = sd.begin(SD_CONFIG);
   if (SD_CONNECTED == 0) {
-    Serial.println("Could not connect to SD card");
+    debugln("Could not connect to SD card");
     sd.initErrorHalt(&Serial);
     return;
   }
@@ -49,38 +49,40 @@ void setupSDCard() {
 
 void loadSDSettings() {
   if (SD_CONNECTED == 0) {
-    Serial.println("SD card not connected");
+    debugln("SD card not connected");
     return;
   }
   int sdDetected = digitalRead(SD_DETECT_PIN);
   if (sdDetected == LOW) {
-    Serial.println("SD card detected");
+    debugln("SD card detected");
   }
   int fileExists = sd.exists(settingsFilename);
   if (!fileExists) {
-    Serial.println("Settings file not found");
+    debugln("Settings file not found");
     return;
   }
   settingsFile = sd.open(settingsFilename, FILE_READ);
   if (settingsFile) {
-    Serial.println("Found setting file");
+    debugln("Found setting file");
     parseSettingsFile();
   } else {
-    Serial.println("Error accessing settings file.");
+    debugln("Error accessing settings file.");
   }
   settingsFile.close();
 }
 
 void storeSDSettings() {
   if (SD_CONNECTED == 0) {
-    Serial.println("SD card not connected");
+    debugln("SD card not connected");
     return;
   }
-  Serial.println("Storing settings");
+  debugln("Storing settings");
   if (!settingsFile.open(settingsFilename, FILE_WRITE)) {
-    Serial.println("Could not create settings file");
+    debugln("Could not create settings file");
     return;
   }
+  // First clear everything in the file:
+  settingsFile.truncate(0);
   for (int i = 0; i < MOTORS_NUMBER; i++) {
     printMotorSettings(i,motorSpeeds[i]);
   }
@@ -97,18 +99,18 @@ void printMotorSettings(int motorIndex, int* speed) {
 void parseSettingsFile() {
   //Max of 500 chars settings file. Should be fine for a little while.
   char line[40];
-  Serial.println("Stored settings:");
+  debugln("Stored settings:");
   while (settingsFile.available()) {
     int n = settingsFile.fgets(line, sizeof(line));
     if (n <= 0) {
-      Serial.println("Reading from settings file failed.");
+      debugln("Reading from settings file failed.");
     }
     if (line[n - 1] != '\n' && n == (sizeof(line) - 1)) {
-      Serial.println("Settings file line too long");
+      debugln("Settings file line too long");
     }
-    Serial.print(line);
+    debug(line);
     if (!parseLine(line)) {
-      Serial.println("Error processing line");
+      debugln("Error processing line");
     }
   }
   settingsFile.close();
@@ -120,7 +122,7 @@ bool parseLine(char* str) {
   if (!str) return false;
   if (str[0] == 'm') {
     if (strlen(str) > 2) {
-      Serial.println("No support for more than 9 motors.");
+      debugln("No support for more than 9 motors.");
       return false;
     }
     // C way to get int from char - subtracting ASCII numbers.
@@ -133,6 +135,6 @@ bool parseLine(char* str) {
     setMotorSpeed(motor, motorSpeed);
     return true;
   }
-  Serial.println("Setting not recognized");
+  debugln("Setting not recognized");
   return false;
 }
