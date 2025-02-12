@@ -36,13 +36,19 @@
 
 // Enable/Disable Features
 #define ENABLE_END_STOPS false
+// The start/stop trigger should be wired to Z MAX
 #define ENABLE_START_STOP_TRIGGER false
 #define ENABLE_SD_CARD true
-// Connect a sensor using an optocoupler, connect to the endstop pins. Wire G (opto) to - and V1 (opto) to S.
+// Connect a sensor using an optocoupler, connect to Z MIN. Wire G (opto) to - and V1 (opto) to S.
 #define ENABLE_YARN_BREAK_DETECTION false
-// When enabled, the start/stop signal will be sent through Serial1, so that it
-// can be picked up by a second arduino board.
+// When enabled, the start/stop signal will be sent through Serial3, so that it
+// can be picked up by a second arduino board. 
+// The extra serial ports are: Serial1 on pins 19 (RX) and 18 (TX), Serial2 on pins 17 (RX) and 16 (TX), Serial3 on pins 15 (RX) and 14 (TX)
+// To use Serial3 connect the Y MIN of board 1 to Y MAX of board 2 (connect TX of board 1 to RX of board 2, we don't need to connect the other way because 
+// board 2 doesn't talk back. Wire GND to GND, S to S and V to V. 
 #define ENABLE_ARDUINO_2 false
+// When two arduino's are connected, one should be the master.
+#define IS_MASTER false
 
 
 // Settings that enable length computation
@@ -63,11 +69,12 @@ int motorSpeeds[MOTORS_NUMBER] = {& m0Speed, & m1Speed, & m2Speed, & m3Speed, & 
 bool IS_RUNNING = false;
 
 // The end stop should not be triggered very frequently.
-const long END_STOP_TRIGGER_INTERVAL = 2000; 
+const volatile long END_STOP_TRIGGER_INTERVAL = 2000; 
 const long SWITCH_START_STOP_INTERVAL = 1000; 
 // Marked volatile as these are modified from an interrupt method.
 volatile unsigned long END_STOP_TRIGGER_MILLIS_LAST = 0;
 volatile signed int ELEVATOR_DIRECTION = 1;
+volatile boolean END_STOP_TRIGGERED = false;
 unsigned long SWITCH_START_STOP_POLL_LAST = 0;
 
 // Yarn break detection state
@@ -106,7 +113,7 @@ void setup() {
     Serial.begin(HILO_SERIAL_BAUDRATE); 
   }
   if (ENABLE_ARDUINO_2) {
-    Serial1.begin(HILO_SERIAL_BAUDRATE); 
+    Serial3.begin(HILO_SERIAL_BAUDRATE); 
   }
   debugln("Starting up...");
   
@@ -132,8 +139,8 @@ void setup() {
 
 void loop() {
   serialCommunicationLoop();
-  if (ENABLE_ARDUINO_2){
-    serial1CommunicationLoop(); 
+  if (ENABLE_ARDUINO_2 && !IS_MASTER){
+    serial3CommunicationLoop(); 
   }
   screenControllerLoop();
   runMachineLoop();
@@ -170,33 +177,43 @@ void serialCommunicationLoop() {
   if (Serial.available() > 0) {
     // read a character from serial, if one is available
     String data = Serial.readStringUntil('\n');
-    debug("Received ");
-    debugln(data);
-    if (data == " ") {
-      startStopMachine();
-    }
-    if (data.startsWith("m")) {
-      int motor = data.substring(1,2).toInt();
-      int motorSpeed = data.substring(2).toInt();
-      setMotorSpeed(motor, motorSpeed);
-    }
-    if (data.startsWith("R")) {
-      debugln("Reversion motor direction");
-      MOTOR_DIR = -MOTOR_DIR;
-    }
+    processSerialData(data);
   }
 }
 
-void serial1CommunicationLoop() {
-  if (Serial1.available() > 0) {
+void processSerialData(String data) {
+  debug("Received: ");
+  debug(data);
+  debugln("#");
+  if (data == " ") {
+    startStopMachine();
+  }
+  if (data.startsWith("s")) {
+    startStopMachine();
+  }
+  if (data.startsWith("m")) {
+    int motor = data.substring(1,2).toInt();
+    int motorSpeed = data.substring(2).toInt();
+    setMotorSpeed(motor, motorSpeed);
+  }
+  if (data.startsWith("R")) {
+    debugln("Reversion motor direction");
+    MOTOR_DIR = -MOTOR_DIR;
+  }
+}
+
+void serial3CommunicationLoop() {
+  if (Serial3.available() > 0) {
     // read a character from serial, if one is available
-    String data = Serial1.readStringUntil('\n');
-    debug("Received on serial 1");
-    debugln(data);
+    String data = Serial3.readStringUntil('\n');
+    debugln("Received on serial 3");
+    processSerialData(data);
   }
 }
 
 boolean startStopMachine() {
+  debugln("Start stopping machine");
+  emitStartStop();
   if (IS_RUNNING) {
     stopMachine();
     storeSDSettings();
@@ -240,6 +257,11 @@ void startMachine() {
 
 void runMachineLoop() {
   if (IS_RUNNING) {
+    if (END_STOP_TRIGGERED) {
+      int *currentSpeed = motorSpeeds[END_STOP_MOTOR_INDEX];
+      motors[END_STOP_MOTOR_INDEX]->spin((*currentSpeed) * ELEVATOR_DIRECTION);
+      END_STOP_TRIGGERED = false;
+    }
     for(int i = 0; i < MOTORS_NUMBER; i++ ) {
       ContinuousStepper<StepperDriver>* motor = motors[i];
       motor->loop();
@@ -294,7 +316,7 @@ void setupEndStops() {
 }
 
 void setupStartStopTrigger() {
-  pinMode(PIN_END_STOP_Y_MIN, INPUT_PULLUP); 
+  pinMode(PIN_END_STOP_Z_MAX, INPUT_PULLUP); 
 }
 
 void setupYarnBreakDetection() {
@@ -305,9 +327,9 @@ void endStopTrigger() {
   const unsigned long currentMillis = millis();
   if (currentMillis > (END_STOP_TRIGGER_MILLIS_LAST + END_STOP_TRIGGER_INTERVAL)) {
     debugln("End stop triggered");
-    ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;
-    motors[END_STOP_MOTOR_INDEX]->spin(motorSpeeds[END_STOP_MOTOR_INDEX]*ELEVATOR_DIRECTION);
+    ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;   
     END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
+    END_STOP_TRIGGERED = true;
   }
 }
 
@@ -316,7 +338,7 @@ void startStopBySwitchTrigger() {
   if (currentMillis > (SWITCH_START_STOP_POLL_LAST + SWITCH_START_STOP_INTERVAL)) {
     // Lets poll
     SWITCH_START_STOP_POLL_LAST = currentMillis;
-    int triggered = digitalRead(PIN_END_STOP_Y_MIN);
+    int triggered = digitalRead(PIN_END_STOP_Z_MAX);
     if (triggered == LOW) {
       debugln("Start/Stop endstop triggered");
       startStopMachine();
@@ -369,6 +391,22 @@ void setCurrentRunDistance(float distance) {
 
 void resetRunCounter() {
   CURRENT_RUN_DISTANCE = 0;
+}
+
+void emitStartStop() {
+  if (ENABLE_ARDUINO_2) {
+    emitSerialMessage("s");
+  }
+}
+
+void emitSerialMessage(String msg) {
+  if (IS_MASTER) {
+    debug("Emitting: ");
+    debug(msg);
+    debugln("#");
+    // Only the master should emit serial messages.
+    Serial3.println(msg); 
+  }
 }
 
 void debug(char* msg) {
