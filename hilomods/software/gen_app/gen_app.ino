@@ -10,22 +10,27 @@
 #define PIN_MOTOR_1_STEP     54  // Motor 1 Step Pin
 #define PIN_MOTOR_1_DIR      55  // Motor 1 Direction Pin
 #define PIN_MOTOR_1_ENABLE   38  // Motor 1 Enable Pin
+#define MOTOR_1_ACTIVE_LEVEL LOW // Some NEMA 23 have this set to LOW, so check your motor specs.
 
 #define PIN_MOTOR_2_STEP     60  // Motor 2 Step Pin
 #define PIN_MOTOR_2_DIR      61  // Motor 2 Direction Pin
 #define PIN_MOTOR_2_ENABLE   56  // Motor 2 Enable Pin
+#define MOTOR_2_ACTIVE_LEVEL LOW // Some NEMA 23 have this set to LOW, so check your motor specs.
 
 #define PIN_MOTOR_3_STEP      46  // Motor 3 Step Pin
 #define PIN_MOTOR_3_DIR       48  // Motor 3 Direction Pin
 #define PIN_MOTOR_3_ENABLE    62  // Motor 3 Enable Pin
+#define MOTOR_3_ACTIVE_LEVEL LOW // Some NEMA 23 have this set to LOW, so check your motor specs.
 
 #define PIN_MOTOR_4_STEP   36  // Motors 4 Step Pin
 #define PIN_MOTOR_4_DIR    34  // Motors 4 Direction Pin
 #define PIN_MOTOR_4_ENABLE 30  // Motors 4 Enable Pin
+#define MOTOR_4_ACTIVE_LEVEL LOW // Some NEMA 23 have this set to LOW, so check your motor specs.
 
 #define PIN_MOTOR_5_STEP   26  // Motors 5 Step Pin
 #define PIN_MOTOR_5_DIR    28  // Motors 5 Direction Pin
 #define PIN_MOTOR_5_ENABLE 24  // Motors 5 Enable Pin
+#define MOTOR_5_ACTIVE_LEVEL LOW // Some NEMA 23 have this set to LOW, so check your motor specs.
 
 #define PIN_END_STOP_X_MAX     3  // X Max End Stop Pin
 #define PIN_END_STOP_X_MIN     2  // X Min End Stop Pin
@@ -134,7 +139,6 @@ void setup() {
   if (ENABLE_YARN_BREAK_DETECTION) {
     setupYarnBreakDetection();
   }
-  setSteppersEnabled(false);
 }
 
 void loop() {
@@ -153,23 +157,21 @@ void loop() {
 }
 
 void initMotors() {
-  // set the mode for the stepper driver enable pins
-  pinMode (PIN_MOTOR_1_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_2_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_3_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_4_ENABLE, OUTPUT);
-  pinMode (PIN_MOTOR_5_ENABLE, OUTPUT);
-  
   motor1.begin(PIN_MOTOR_1_STEP, PIN_MOTOR_1_DIR);
-  motor1.setEnablePin(PIN_MOTOR_1_ENABLE, LOW);
+  motor1.setEnablePin(PIN_MOTOR_1_ENABLE, MOTOR_1_ACTIVE_LEVEL);
+  motor1.powerOff();
   motor2.begin(PIN_MOTOR_2_STEP, PIN_MOTOR_2_DIR);
-  motor2.setEnablePin(PIN_MOTOR_2_ENABLE, LOW);
+  motor2.setEnablePin(PIN_MOTOR_2_ENABLE, MOTOR_2_ACTIVE_LEVEL);
+  motor2.powerOff();
   motor3.begin(PIN_MOTOR_3_STEP, PIN_MOTOR_3_DIR);
-  motor3.setEnablePin(PIN_MOTOR_3_ENABLE, LOW);
+  motor3.setEnablePin(PIN_MOTOR_3_ENABLE, MOTOR_3_ACTIVE_LEVEL);
+  motor3.powerOff();
   motor4.begin(PIN_MOTOR_4_STEP, PIN_MOTOR_4_DIR);
-  motor4.setEnablePin(PIN_MOTOR_4_ENABLE, LOW);
+  motor4.setEnablePin(PIN_MOTOR_4_ENABLE, MOTOR_4_ACTIVE_LEVEL);
+  motor4.powerOff();
   motor5.begin(PIN_MOTOR_5_STEP, PIN_MOTOR_5_DIR);
-  motor5.setEnablePin(PIN_MOTOR_5_ENABLE, LOW);
+  motor5.setEnablePin(PIN_MOTOR_5_ENABLE, MOTOR_5_ACTIVE_LEVEL);
+  motor5.powerOff();
 }
 
 // This loops allows you to send commands to the machine through the Arduino Serial Monitor.
@@ -212,7 +214,7 @@ void serial3CommunicationLoop() {
 }
 
 boolean startStopMachine() {
-  debugln("Start stopping machine");
+  debugln("Start/stopping machine");
   emitStartStop();
   if (IS_RUNNING) {
     stopMachine();
@@ -234,16 +236,18 @@ void stopMachine() {
     motor->stop();
     motor->powerOff();
   }  
-  setSteppersEnabled(false);
 }
 
 void startMachine() {
   debugln("Starting machine");
   unsigned long currentMillis = millis();
   RUN_START_MILLIS = currentMillis;
-  setSteppersEnabled(true);
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
     int *currentSpeed = motorSpeeds[i];
+    if (*currentSpeed == 0) {
+      // This motor is not doing anything so lets skip it.
+      continue;
+    }
     int motorSpeed = *currentSpeed * MOTOR_DIR;
     if (i == END_STOP_MOTOR_INDEX) {
       motorSpeed = motorSpeed * ELEVATOR_DIRECTION;
@@ -264,23 +268,12 @@ void runMachineLoop() {
     }
     for(int i = 0; i < MOTORS_NUMBER; i++ ) {
       ContinuousStepper<StepperDriver>* motor = motors[i];
-      motor->loop();
+      if (motor->isPowered()) {
+        motor->loop(); 
+      }
     }
   }
 } 
-
-// Enables or disables all steppers. Used for saving power
-// and allowing adjustments by hand when the machine isn't running.
-void setSteppersEnabled(bool enabled) {
-  int value = LOW;
-  if (!enabled) value = HIGH;
-
-  digitalWrite(PIN_MOTOR_1_ENABLE, value);
-  digitalWrite(PIN_MOTOR_2_ENABLE, value);
-  digitalWrite(PIN_MOTOR_3_ENABLE, value);
-  digitalWrite(PIN_MOTOR_4_ENABLE, value);
-  digitalWrite(PIN_MOTOR_5_ENABLE, value);
-}
 
 void printMachineSettings() {
   for(int i = 0; i < MOTORS_NUMBER; i++ ) {
