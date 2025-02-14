@@ -83,7 +83,7 @@ volatile boolean END_STOP_TRIGGERED = false;
 unsigned long SWITCH_START_STOP_POLL_LAST = 0;
 
 // Yarn break detection state
-const long YARN_BREAK_POLL_INTERVAL = 1500;
+const long YARN_BREAK_POLL_INTERVAL = 1250;
 long YARN_BREAK_POLL_LAST = 0;
 long YARN_BREAK_DETECTED_LAST = 0;
 
