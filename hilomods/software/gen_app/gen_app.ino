@@ -3,7 +3,7 @@
 #define HILO_SERIAL_BAUDRATE 115200
 
 // Set to true when connected to a serial output (when the arduino is connected to the computer).
-#define DEBUG_ENABLED false
+#define DEBUG_ENABLED true
 
 #define PIN_LED               13  // Arduino on-board LED
 
@@ -46,15 +46,6 @@
 #define ENABLE_SD_CARD true
 // Connect a sensor using an optocoupler, connect to Z MIN. Wire G (opto) to - and V1 (opto) to S.
 #define ENABLE_YARN_BREAK_DETECTION false
-// When enabled, the start/stop signal will be sent through Serial3, so that it
-// can be picked up by a second arduino board. 
-// The extra serial ports are: Serial1 on pins 19 (RX) and 18 (TX), Serial2 on pins 17 (RX) and 16 (TX), Serial3 on pins 15 (RX) and 14 (TX)
-// To use Serial3 connect the Y MIN of board 1 to Y MAX of board 2 (connect TX of board 1 to RX of board 2, we don't need to connect the other way because 
-// board 2 doesn't talk back. Wire GND to GND, S to S and V to V. 
-#define ENABLE_ARDUINO_2 false
-// When two arduino's are connected, one should be the master.
-#define IS_MASTER false
-
 
 // Settings that enable length computation
 #define STEPS_PER_REVOLUTION 200
@@ -98,6 +89,15 @@ unsigned long RUN_START_MILLIS = 0;
 int CURRENT_RUN_STEPS = 0;
 float CURRENT_RUN_DISTANCE = 0;
 
+// When enabled, the start/stop signal will be sent through Serial3, so that it
+// can be picked up by a second arduino board. 
+// The extra serial ports are: Serial1 on pins 19 (RX) and 18 (TX), Serial2 on pins 17 (RX) and 16 (TX), Serial3 on pins 15 (RX) and 14 (TX)
+// To use Serial3 connect the Y MIN of board 1 to Y MAX of board 2 (connect TX of board 1 to RX of board 2, we don't need to connect the other way because 
+// board 2 doesn't talk back. Wire GND to GND, S to S and V to V. 
+int ENABLE_ARDUINO_2 = 0;
+// When two arduino's are connected, one should be the master.
+int IS_MASTER = 0;
+
 ContinuousStepper<StepperDriver> motor1;
 ContinuousStepper<StepperDriver> motor2;
 ContinuousStepper<StepperDriver> motor3;
@@ -116,9 +116,6 @@ ContinuousStepper<StepperDriver>* motors[MOTORS_NUMBER] = {
 void setup() {
   if (DEBUG_ENABLED) {
     Serial.begin(HILO_SERIAL_BAUDRATE); 
-  }
-  if (ENABLE_ARDUINO_2) {
-    Serial3.begin(HILO_SERIAL_BAUDRATE); 
   }
   debugln("Starting up...");
   
@@ -390,6 +387,37 @@ void emitStartStop() {
   if (ENABLE_ARDUINO_2) {
     emitSerialMessage("s");
   }
+}
+
+void toggleArduino2() {
+  ENABLE_ARDUINO_2 = (ENABLE_ARDUINO_2 + 1) % 2;
+  if (ENABLE_ARDUINO_2 == 0) {
+    disableArduino2();
+  } else {
+    enableArduino2();
+  }
+}
+
+void setEnableArduino2(int active) {
+  ENABLE_ARDUINO_2 = active;
+}
+
+void setIsMaster(int active) {
+  IS_MASTER = active;
+}
+
+void disableArduino2() {
+  debugln("Disabling arduino 2");
+  Serial3.end();
+}
+
+void enableArduino2() {
+  debugln("Enabling arduino 2");
+  Serial3.begin(HILO_SERIAL_BAUDRATE); 
+}
+
+void toggleIsMaster() {
+  IS_MASTER = (IS_MASTER + 1) % 2;
 }
 
 void emitSerialMessage(String msg) {

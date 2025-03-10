@@ -87,6 +87,7 @@ void storeSDSettings() {
     printMotorSettings(i,motorSpeeds[i]);
   }
   printCurrentRunDistance();
+  printAdditionalSettings();
   settingsFile.close();
 }
 
@@ -103,6 +104,15 @@ void printCurrentRunDistance() {
   settingsFile.print("d");
   settingsFile.print(":");
   settingsFile.println(CURRENT_RUN_DISTANCE_STRING);
+}
+
+void printAdditionalSettings() {
+  settingsFile.print("_a2");
+  settingsFile.print(":");
+  settingsFile.println(ENABLE_ARDUINO_2);
+  settingsFile.print("_ma");
+  settingsFile.print(":");
+  settingsFile.println(IS_MASTER);
 }
 
 void parseSettingsFile() {
@@ -151,6 +161,23 @@ bool parseLine(char* str) {
     float distance = atof(str);
     setCurrentRunDistance(distance);
     return true;
+  }
+  if (str[0] == '_') {
+    // Parsing additional settings
+    if (str[1] == 'a' && str[2] == '2') {
+      // Get the next part.
+      str = strtok(NULL, ":");
+      if (str == NULL) return false;
+      setEnableArduino2(atoi(str));
+      return true;
+    } 
+    if (str[1] == 'm' && str[2] == 'a') {
+      // Get the next part.
+      str = strtok(NULL, ":");
+      if (str == NULL) return false;
+      setIsMaster(atoi(str));
+      return true;
+    } 
   }
   debugln("Setting not recognized");
   return false;
