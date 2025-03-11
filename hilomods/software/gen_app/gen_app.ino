@@ -94,9 +94,9 @@ float CURRENT_RUN_DISTANCE = 0;
 // The extra serial ports are: Serial1 on pins 19 (RX) and 18 (TX), Serial2 on pins 17 (RX) and 16 (TX), Serial3 on pins 15 (RX) and 14 (TX)
 // To use Serial3 connect the Y MIN of board 1 to Y MAX of board 2 (connect TX of board 1 to RX of board 2, we don't need to connect the other way because 
 // board 2 doesn't talk back. Wire GND to GND, S to S and V to V. 
-int ENABLE_ARDUINO_2 = 0;
-// When two arduino's are connected, one should be the master.
-int IS_MASTER = 0;
+int ENABLE_SERIAL_IO = 0;
+// Whether this ard
+int SERIAL_TRANSMIT = 0;
 
 ContinuousStepper<StepperDriver> motor1;
 ContinuousStepper<StepperDriver> motor2;
@@ -140,7 +140,7 @@ void setup() {
 
 void loop() {
   serialCommunicationLoop();
-  if (ENABLE_ARDUINO_2 && !IS_MASTER){
+  if (ENABLE_SERIAL_IO && !SERIAL_TRANSMIT){
     serial3CommunicationLoop(); 
   }
   screenControllerLoop();
@@ -384,48 +384,48 @@ void resetRunCounter() {
 }
 
 void emitStartStop() {
-  if (ENABLE_ARDUINO_2) {
+  if (ENABLE_SERIAL_IO) {
     emitSerialMessage("s");
   }
 }
 
-void toggleArduino2() {
-  ENABLE_ARDUINO_2 = (ENABLE_ARDUINO_2 + 1) % 2;
-  if (ENABLE_ARDUINO_2 == 0) {
-    disableArduino2();
+void toggleSerialIO() {
+  ENABLE_SERIAL_IO = (ENABLE_SERIAL_IO + 1) % 2;
+  if (ENABLE_SERIAL_IO == 0) {
+    disableSerialIO();
   } else {
-    enableArduino2();
+    enableSerialIO();
   }
 }
 
-void setEnableArduino2(int active) {
-  ENABLE_ARDUINO_2 = active;
+void setEnableSerialIO(int active) {
+  ENABLE_SERIAL_IO = active;
 }
 
-void setIsMaster(int active) {
-  IS_MASTER = active;
+void setSerialTransmit(int active) {
+  SERIAL_TRANSMIT = active;
 }
 
-void disableArduino2() {
-  debugln("Disabling arduino 2");
+void disableSerialIO() {
+  debugln("Disabling serial IO");
   Serial3.end();
 }
 
-void enableArduino2() {
-  debugln("Enabling arduino 2");
+void enableSerialIO() {
+  debugln("Enabling serial IO");
   Serial3.begin(HILO_SERIAL_BAUDRATE); 
 }
 
 void toggleIsMaster() {
-  IS_MASTER = (IS_MASTER + 1) % 2;
+  SERIAL_TRANSMIT = (SERIAL_TRANSMIT + 1) % 2;
 }
 
 void emitSerialMessage(String msg) {
-  if (IS_MASTER) {
+  if (SERIAL_TRANSMIT) {
     debug("Emitting: ");
     debug(msg);
     debugln("#");
-    // Only the master should emit serial messages.
+    // Only emit if required.
     Serial3.println(msg); 
   }
 }

@@ -57,8 +57,8 @@ SettingLine motorSpeedSettings[MENU_ITEMS_NUMBER] = {
 
 int noValue = 0;
 SettingLine settings1[MENU_ITEMS_NUMBER] = {
-  { "Arduino 2", & ENABLE_ARDUINO_2, BOOLEAN_SETTING_TYPE },
-  { "Master", & IS_MASTER, BOOLEAN_SETTING_TYPE },
+  { "Serial IO", & ENABLE_SERIAL_IO, BOOLEAN_SETTING_TYPE },
+  { "Transmit", & SERIAL_TRANSMIT, BOOLEAN_SETTING_TYPE },
   { "[not used]", & noValue, INTEGER_SETTING_TYPE },
   { "[not used]", & noValue, INTEGER_SETTING_TYPE },
   { "[not used]", & noValue, INTEGER_SETTING_TYPE },
@@ -299,7 +299,7 @@ void nextPage() {
 void handlePage1SettingsChange(int menuLinePos, int ENCODER_CHANGE) {
   switch (menuLinePos) {
     case 0:
-      toggleArduino2();
+      toggleSerialIO();
       break;
     case 1:
       toggleIsMaster();

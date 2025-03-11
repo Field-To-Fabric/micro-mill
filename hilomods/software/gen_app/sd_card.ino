@@ -107,12 +107,12 @@ void printCurrentRunDistance() {
 }
 
 void printAdditionalSettings() {
-  settingsFile.print("_a2");
+  settingsFile.print("_io");
   settingsFile.print(":");
-  settingsFile.println(ENABLE_ARDUINO_2);
-  settingsFile.print("_ma");
+  settingsFile.println(ENABLE_SERIAL_IO);
+  settingsFile.print("_tx");
   settingsFile.print(":");
-  settingsFile.println(IS_MASTER);
+  settingsFile.println(SERIAL_TRANSMIT);
 }
 
 void parseSettingsFile() {
@@ -164,18 +164,18 @@ bool parseLine(char* str) {
   }
   if (str[0] == '_') {
     // Parsing additional settings
-    if (str[1] == 'a' && str[2] == '2') {
+    if (str[1] == 'i' && str[2] == 'o') {
       // Get the next part.
       str = strtok(NULL, ":");
       if (str == NULL) return false;
-      setEnableArduino2(atoi(str));
+      setEnableSerialIO(atoi(str));
       return true;
     } 
-    if (str[1] == 'm' && str[2] == 'a') {
+    if (str[1] == 't' && str[2] == 'x') {
       // Get the next part.
       str = strtok(NULL, ":");
       if (str == NULL) return false;
-      setIsMaster(atoi(str));
+      setSerialTransmit(atoi(str));
       return true;
     } 
   }
