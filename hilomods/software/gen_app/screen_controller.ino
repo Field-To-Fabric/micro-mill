@@ -302,7 +302,7 @@ void handlePage1SettingsChange(int menuLinePos, int ENCODER_CHANGE) {
       toggleSerialIO();
       break;
     case 1:
-      toggleIsMaster();
+      toggleSerialTransmit();
     default:
       // do nothing
       break;

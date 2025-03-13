@@ -40,7 +40,7 @@
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
 // Enable/Disable Features
-#define ENABLE_END_STOPS false
+#define ENABLE_END_STOPS true
 // The start/stop trigger should be wired to Z MAX
 #define ENABLE_START_STOP_TRIGGER false
 #define ENABLE_SD_CARD true
@@ -136,6 +136,9 @@ void setup() {
   if (ENABLE_YARN_BREAK_DETECTION) {
     setupYarnBreakDetection();
   }
+  if (ENABLE_SERIAL_IO) {
+    enableSerialIO(); 
+  }
 }
 
 void loop() {
@@ -198,6 +201,10 @@ void processSerialData(String data) {
   if (data.startsWith("R")) {
     debugln("Reversion motor direction");
     MOTOR_DIR = -MOTOR_DIR;
+  }
+  if (data.startsWith("IO")) {
+    debugln("Toggling Serial IO");
+    toggleSerialIO();
   }
 }
 
@@ -298,11 +305,9 @@ int incrementMotorSpeed(int motorNumber, int direction) {
 }
 
 void setupEndStops() {
-  // Not needed at the moment.
-  //pinMode(PIN_END_STOP_X_MAX, INPUT_PULLUP);
+  debugln("Setting up X MIN end stop");
   pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), endStopTrigger, FALLING);
-  //attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MAX), endStopTrigger, FALLING);
 }
 
 void setupStartStopTrigger() {
@@ -384,7 +389,7 @@ void resetRunCounter() {
 }
 
 void emitStartStop() {
-  if (ENABLE_SERIAL_IO) {
+  if (SERIAL_TRANSMIT) {
     emitSerialMessage("s");
   }
 }
@@ -416,7 +421,7 @@ void enableSerialIO() {
   Serial3.begin(HILO_SERIAL_BAUDRATE); 
 }
 
-void toggleIsMaster() {
+void toggleSerialTransmit() {
   SERIAL_TRANSMIT = (SERIAL_TRANSMIT + 1) % 2;
 }
 
