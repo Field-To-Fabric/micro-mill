@@ -1,6 +1,7 @@
 #include <ContinuousStepper.h>
 
 #define HILO_SERIAL_BAUDRATE 115200
+#define SERIAL_BAUDRATE 300
 
 // Set to true when connected to a serial output (when the arduino is connected to the computer).
 #define DEBUG_ENABLED true
@@ -33,13 +34,14 @@
 #define MOTOR_5_ACTIVE_LEVEL LOW // Some NEMA 23 have this set to LOW, so check your motor specs.
 
 #define PIN_END_STOP_X_MAX     3  // X Max End Stop Pin
-#define PIN_END_STOP_X_MIN     2  // X Min End Stop Pin
+#define PIN_END_STOP_X_MIN     2  // X Min End Stop Pin 
 #define PIN_END_STOP_Y_MIN     14  // Y Min End Stop Pin
 #define PIN_END_STOP_Y_MAX     15  // Y Max End Stop Pin
 #define PIN_END_STOP_Z_MIN     18  // Z Min End Stop Pin
 #define PIN_END_STOP_Z_MAX     19  // Z Max End Stop Pin
 
 // Enable/Disable Features
+// The endstop plugs into X MIN, except if you are using the elegoo board and it needs to go into x max...
 #define ENABLE_END_STOPS true
 // The start/stop trigger should be wired to Z MAX
 #define ENABLE_START_STOP_TRIGGER false
@@ -94,6 +96,8 @@ float CURRENT_RUN_DISTANCE = 0;
 // The extra serial ports are: Serial1 on pins 19 (RX) and 18 (TX), Serial2 on pins 17 (RX) and 16 (TX), Serial3 on pins 15 (RX) and 14 (TX)
 // To use Serial3 connect the Y MIN of board 1 to Y MAX of board 2 (connect TX of board 1 to RX of board 2, we don't need to connect the other way because 
 // board 2 doesn't talk back. Wire GND to GND, S to S and V to V. 
+// Be careful - directly wiring the serial connection will fry the voltage regulator on the receiving arduino, so you need to isolate the two using an optocoupler (the 817 will
+// do at this low baudrate). Wiring (from RAMPS endstop Y MIN to Y MAX): Ymin (+) to OPTO (Vin), Ymin (S) to OPTO (G), OPTO (Vout) to Ymax (+) OPTO (G) to Ymax (S)
 int ENABLE_SERIAL_IO = 0;
 // Whether this ard
 int SERIAL_TRANSMIT = 0;
@@ -205,6 +209,10 @@ void processSerialData(String data) {
   if (data.startsWith("IO")) {
     debugln("Toggling Serial IO");
     toggleSerialIO();
+  }
+  if (data.startsWith("IOT")) {
+    debugln("Testing IO Serial");
+    emitSerialMessage("ping");
   }
 }
 
@@ -418,7 +426,8 @@ void disableSerialIO() {
 
 void enableSerialIO() {
   debugln("Enabling serial IO");
-  Serial3.begin(HILO_SERIAL_BAUDRATE); 
+  Serial3.begin(SERIAL_BAUDRATE); 
+  emitSerialMessage("Ping");
 }
 
 void toggleSerialTransmit() {
