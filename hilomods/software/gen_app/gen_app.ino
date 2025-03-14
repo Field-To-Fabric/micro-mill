@@ -97,7 +97,7 @@ float CURRENT_RUN_DISTANCE = 0;
 // To use Serial3 connect the Y MIN of board 1 to Y MAX of board 2 (connect TX of board 1 to RX of board 2, we don't need to connect the other way because 
 // board 2 doesn't talk back. Wire GND to GND, S to S and V to V. 
 // Be careful - directly wiring the serial connection will fry the voltage regulator on the receiving arduino, so you need to isolate the two using an optocoupler (the 817 will
-// do at this low baudrate). Wiring (from RAMPS endstop Y MIN to Y MAX): Ymin (+) to OPTO (Vin), Ymin (S) to OPTO (G), OPTO (Vout) to Ymax (+) OPTO (G) to Ymax (S)
+// do at this low baudrate). Wiring (from RAMPS endstop Y MIN to Y MAX): Ymin (+) to OPTO (Vin), Ymin (S) to OPTO (G), OPTO (Vout) to Ymax (+) OPTO (G) to Ymax (S) 
 int ENABLE_SERIAL_IO = 0;
 // Whether this ard
 int SERIAL_TRANSMIT = 0;
