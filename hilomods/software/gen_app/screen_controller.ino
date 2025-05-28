@@ -32,27 +32,43 @@ unsigned long ENCODER_MILLIS_LAST = 0;          //Last time we read the encoder 
 unsigned long ENCODER_BUTTON_MILLIS_LAST = 0;   //Last time we checked for an encoder button press.
 unsigned long HILO_START_STOP_LAST_MILLIS = 0;  //Last time we check for start/stop.
 
-// Hilo Menu 
-struct MenuLine {
+// Not using enums because of weird compiler behaviour.
+const int INTEGER_SETTING_TYPE = 0;
+const int BOOLEAN_SETTING_TYPE = 1;
+
+struct SettingLine {
   char name[10];
-  int values;
-  int *value1;
-  char *value2;
+  int* value1;
+  int settingType;
 };
 
-const int MENU_ITEMS_NUMBER = MOTORS_NUMBER + 1;
-MenuLine menuItems[MENU_ITEMS_NUMBER] = { 
-  { "Motor 1",  1, motorSpeeds[0] },
-  { "Motor 2",  1, motorSpeeds[1] },
-  { "Motor 3",  1, motorSpeeds[2] },
-  { "Motor 4",  1, motorSpeeds[3] },
-  { "Motor 5",  1, motorSpeeds[4] },
-  { "Start", 0 }
+// Iterating through the options goes through all the menu items and all the control items.
+const int PAGES_NUMBER = 2;
+const int MENU_ITEMS_NUMBER = MOTORS_NUMBER;
+const int CONTROL_ITEMS_NUMBER = 3;
+
+SettingLine motorSpeedSettings[MENU_ITEMS_NUMBER] = { 
+  { "Motor 1", motorSpeeds[0], INTEGER_SETTING_TYPE },
+  { "Motor 2", motorSpeeds[1], INTEGER_SETTING_TYPE },
+  { "Motor 3", motorSpeeds[2], INTEGER_SETTING_TYPE },
+  { "Motor 4", motorSpeeds[3], INTEGER_SETTING_TYPE },
+  { "Motor 5", motorSpeeds[4], INTEGER_SETTING_TYPE }
 };
+
+int noValue = 0;
+SettingLine settings1[MENU_ITEMS_NUMBER] = {
+  { "Serial IO", & ENABLE_SERIAL_IO, BOOLEAN_SETTING_TYPE },
+  { "Transmit", & SERIAL_TRANSMIT, BOOLEAN_SETTING_TYPE },
+  { "[not used]", & noValue, INTEGER_SETTING_TYPE },
+  { "[not used]", & noValue, INTEGER_SETTING_TYPE },
+  { "[not used]", & noValue, INTEGER_SETTING_TYPE },
+};
+
+SettingLine *pages[PAGES_NUMBER] = { motorSpeedSettings, settings1 };
 
 boolean menuLineSelected = false;
 int menuLinePos = 0;
-int menuLineItemPos = 0;
+int pagePos = 0;
 
 // Initialize the U8GLIB lib for our screen
 // SPI Com: SCK = en = 23, MOSI = rw = 17, CS = di = 16
@@ -104,7 +120,7 @@ void updateMenu() {
      if (menuLineSelected) {
        updateMenuValue();
      } else {
-      menuLinePos = abs(menuLinePos + ENCODER_CHANGE) % MENU_ITEMS_NUMBER;
+      menuLinePos = abs(menuLinePos + ENCODER_CHANGE) % (MENU_ITEMS_NUMBER + CONTROL_ITEMS_NUMBER);
      }
      ENCODER_CHANGE = 0;
   }
@@ -114,12 +130,18 @@ void updateMenuValue() {
   if (ENCODER_CHANGE == 0) {
     // Nothing to do.
     return;
+  } 
+  switch (pagePos) {
+    case 0: 
+      incrementMotorSpeed(menuLinePos, ENCODER_CHANGE); 
+      break;
+    case 1: 
+      handlePage1SettingsChange(menuLinePos, ENCODER_CHANGE);
+      break;
+    default:
+      // do nothing
+      break;
   }
-  menuItems[menuLinePos].value1 = incrementMotorSpeed(menuLinePos, ENCODER_CHANGE);
-}
-
-int getMenuLineItemValues() {
-  return menuItems[menuLinePos].values;  
 }
 
 void encoderButtonTrigger() {
@@ -131,18 +153,14 @@ void encoderButtonTrigger() {
   ENCODER_PIN_STATUS = digitalRead(BTN_ENC);
   if (!ENCODER_PIN_STATUS) {
     if (menuLineSelected) {
-      int values = getMenuLineItemValues();
-      if (menuLineItemPos < values - 1) {
-       // There are still values to go so don't unselect the line and move the line item selection
-       int values = getMenuLineItemValues();
-       menuLineItemPos = (menuLineItemPos + 1) % values;
-      } else {
-        // Unselect the line and reset the line item pos.
-        menuLineItemPos = 0;
-        menuLineSelected = false;
-      }
-    } else if (menuLinePos == MENU_ITEMS_NUMBER - 1) {
+      menuLineSelected = false;
+    } else if (menuLinePos - MENU_ITEMS_NUMBER == 0) {
       return toggleHilo();
+    } else if (menuLinePos - MENU_ITEMS_NUMBER == 1) {
+      return resetRunCounter();
+    } else if (menuLinePos - MENU_ITEMS_NUMBER == 2) {
+      return nextPage();
+      return;
     } else {
         menuLineSelected = true;
     }
@@ -177,13 +195,16 @@ void drawHilo() {
   u8g.setDefaultBackgroundColor();
   u8g.drawStr(2, 8, "Hallo Hilo!         Run:");
   // Draw the current run value:
+  char CURRENT_RUN_DISTANCE_STRING[11];
+  dtostrf(CURRENT_RUN_DISTANCE, -6, 1, CURRENT_RUN_DISTANCE_STRING);
   u8g.drawStr(95, 8, CURRENT_RUN_DISTANCE_STRING);
   u8g.setDefaultForegroundColor();
   int i;
   int s = 2;
-  for( i = 0; i < MENU_ITEMS_NUMBER; i++ ) {
-    drawMenuLine(menuItems[i], i, s, h, w);
-  }  
+  for(i = 0; i < MENU_ITEMS_NUMBER; i++ ) {
+    drawMenuLine(*(pages[pagePos] + i), i, s, h, w);
+  }
+  drawControlMenu(i, s, h, w);
 }
 
 void toggleHilo() {
@@ -221,50 +242,85 @@ void stopHilo() {
   startStopMachine();
 }
 
-void drawMenuLine( struct MenuLine menuItem, int i, int s, int h, int w) {
+void drawMenuLine(struct SettingLine menuItem, int i, int s, int h, int w) {
   u8g.setDefaultForegroundColor();
   if (menuLinePos != i) {
     u8g.drawStr( 2, (i+s)*TEXT_HEIGHT, menuItem.name);
-    if (menuItem.values > 0) {
-       char value1[4];
-       sprintf (value1, "%d", menuItem.value1);
-       u8g.drawStr( 78, (i+s)*TEXT_HEIGHT, value1);
+    char value1[5];
+    if (menuItem.value1) {
+      formatSettingsValue(*menuItem.value1, value1, menuItem.settingType);
     }
-    if (menuItem.values > 1) {
-       char value2[1];
-       sprintf (value2, "%c", menuItem.value2);
-       u8g.drawStr( 110, (i+s)*TEXT_HEIGHT, value2);
-    }
+    u8g.drawStr( 78, (i+s)*TEXT_HEIGHT, value1);
   } else {
-      if (!menuLineSelected) {
-        u8g.drawBox(0, ((i+s)*TEXT_HEIGHT-h), w, h+2);
-        u8g.setDefaultBackgroundColor();
-      }
-      u8g.drawStr( 2, (i+s)*TEXT_HEIGHT, menuItem.name);
-      if (menuItem.values > 0) {
-        char value1[4];
-        sprintf (value1, "%d", menuItem.value1);
-        int boxWidth = 6 * getNumberLength(menuItem.value1);
-        if (menuLineSelected && menuLineItemPos == 0) {      
-          u8g.setDefaultForegroundColor();  
-          u8g.drawBox(78, ((i+s)*TEXT_HEIGHT-h), boxWidth, h+2);
-          u8g.setDefaultBackgroundColor();
-        }
-        u8g.drawStr( 78, (i+s)*TEXT_HEIGHT, value1);
-      }
-      if (menuItem.values > 1) {
-        char value2[1];
-        sprintf (value2, "%c", menuItem.value2);
-        if (menuLineSelected && menuLineItemPos == 1) {
-          u8g.setDefaultForegroundColor(); 
-          u8g.drawBox(110, ((i+s)*TEXT_HEIGHT-h), 10, h+2);
-          u8g.setDefaultBackgroundColor();
-        } else if (menuLineSelected) {
-           u8g.setDefaultForegroundColor();
-        }
-        u8g.drawStr(110, (i+s)*TEXT_HEIGHT, value2);
-      }
+    if (!menuLineSelected) {
+      u8g.drawBox(0, ((i+s)*TEXT_HEIGHT-h), w, h+2);
+      u8g.setDefaultBackgroundColor();
+    }
+    u8g.drawStr( 2, (i+s)*TEXT_HEIGHT, menuItem.name);
+    char value1[5];
+    int boxWidth = 0;
+    if (menuItem.value1) {
+      formatSettingsValue(*menuItem.value1, value1, menuItem.settingType);
+      boxWidth = 6 * getNumberLength(*menuItem.value1);
+    }
+    if (menuItem.settingType == BOOLEAN_SETTING_TYPE) {
+      boxWidth = 36;
+    }
+    if (menuLineSelected) {      
+      u8g.setDefaultForegroundColor();  
+      u8g.drawBox(78, ((i+s)*TEXT_HEIGHT-h), boxWidth, h+2);
+      u8g.setDefaultBackgroundColor();
+     }
+     u8g.drawStr( 78, (i+s)*TEXT_HEIGHT, value1);
   }
+}
+
+void drawControlMenu(int i, int s, int h, int w) {
+  drawControlMenuItem("START", 0, i, s, h, w);
+  drawControlMenuItem("RESET", 1, i, s, h, w);
+  drawControlMenuItem("NEXT", 2, i, s, h, w);
+}
+
+void drawControlMenuItem(char controlName[10], int controlPos, int i, int s, int h, int w) {
+  u8g.setDefaultForegroundColor();
+  int start = controlPos * 40;
+  if (menuLinePos - MENU_ITEMS_NUMBER == controlPos) {      
+    u8g.setDefaultForegroundColor();
+    u8g.drawBox(start, ((i+s)*TEXT_HEIGHT-h), 30, h+2);
+    u8g.setDefaultBackgroundColor();
+   }
+  u8g.drawStr( start, (i+s)*TEXT_HEIGHT, controlName);
+}
+
+void nextPage() {
+  pagePos = (pagePos + 1) % 2;
+}
+
+void handlePage1SettingsChange(int menuLinePos, int ENCODER_CHANGE) {
+  switch (menuLinePos) {
+    case 0:
+      toggleSerialIO();
+      break;
+    case 1:
+      toggleSerialTransmit();
+    default:
+      // do nothing
+      break;
+  }
+}
+
+void formatSettingsValue(int value, char formattedValue[5], int st) {
+  switch (st) {
+    case BOOLEAN_SETTING_TYPE: 
+      (value == 0) ? sprintf(formattedValue, "false") : sprintf(formattedValue, "true");
+      break;
+    case INTEGER_SETTING_TYPE: 
+      sprintf(formattedValue, "%d", value);
+      break;
+    default:
+      sprintf(formattedValue, "?");
+      break;
+  } 
 }
 
 int getNumberLength(int n) {
