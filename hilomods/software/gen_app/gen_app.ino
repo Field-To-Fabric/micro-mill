@@ -4,7 +4,7 @@
 #define SERIAL_BAUDRATE 300
 
 // Set to true when connected to a serial output (when the arduino is connected to the computer).
-#define DEBUG_ENABLED true
+#define DEBUG_ENABLED false
 
 #define PIN_LED               13  // Arduino on-board LED
 
@@ -42,9 +42,11 @@
 
 // Enable/Disable Features
 // The endstop plugs into X MIN, except if you are using the elegoo board and it needs to go into x max...
-#define ENABLE_END_STOPS true
+#define ENABLE_END_STOPS false
 // The start/stop trigger should be wired to Z MAX
 #define ENABLE_START_STOP_TRIGGER false
+// This cannot be true if ENABLE_END_STOP is true. Run control uses any external monitoring system that can tell the master arduino to stop the run.
+#define ENABLE_RUN_CONTROL true
 #define ENABLE_SD_CARD true
 // Connect a sensor using an optocoupler, connect to Z MIN. Wire G (opto) to - and V1 (opto) to S.
 #define ENABLE_YARN_BREAK_DETECTION false
@@ -128,11 +130,19 @@ void setup() {
   digitalWrite(PIN_LED, LOW);
   initMotors();
   setupScreenController();
+
+  if (ENABLE_END_STOPS && ENABLE_RUN_CONTROL) {
+    debugln("Warning, you cannot have both ends stop and use interrupt for start stop switch.");
+  }
+
   if (ENABLE_END_STOPS) {
     setupEndStops();
   }
   if (ENABLE_START_STOP_TRIGGER) {
     setupStartStopTrigger();
+  }
+  if (ENABLE_RUN_CONTROL) {
+    setupRunControl();
   }
   if (ENABLE_SD_CARD) {
     setupSDCard();
@@ -320,7 +330,14 @@ void setupEndStops() {
 }
 
 void setupStartStopTrigger() {
-  pinMode(PIN_END_STOP_Z_MAX, INPUT_PULLUP); 
+  debugln("Setting up start stop trigger");
+  pinMode(PIN_END_STOP_Z_MAX, INPUT_PULLUP);
+}
+
+void setupRunControl() {
+  debugln("Setting up run control");
+  pinMode(PIN_END_STOP_X_MIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PIN_END_STOP_X_MIN), stopTrigger, FALLING);
 }
 
 void setupYarnBreakDetection() {
@@ -334,6 +351,14 @@ void endStopTrigger() {
     ELEVATOR_DIRECTION = -ELEVATOR_DIRECTION;   
     END_STOP_TRIGGER_MILLIS_LAST = currentMillis;
     END_STOP_TRIGGERED = true;
+  }
+}
+
+void stopTrigger() {
+  debugln("Run control stop triggered");
+  if (IS_RUNNING) {
+    emitStartStop();
+    stopMachine();
   }
 }
 
