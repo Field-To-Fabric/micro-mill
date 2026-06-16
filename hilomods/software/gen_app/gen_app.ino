@@ -4,7 +4,7 @@
 #define SERIAL_BAUDRATE 300
 
 // Set to true when connected to a serial output (when the arduino is connected to the computer).
-#define DEBUG_ENABLED false
+#define DEBUG_ENABLED true
 
 #define PIN_LED               13  // Arduino on-board LED
 
@@ -42,12 +42,12 @@
 
 // Enable/Disable Features
 // The endstop plugs into X MIN, except if you are using the elegoo board and it needs to go into x max...
-#define ENABLE_END_STOPS false
+#define ENABLE_END_STOPS true
 // The start/stop trigger should be wired to Z MAX
 #define ENABLE_START_STOP_TRIGGER false
 // This cannot be true if ENABLE_END_STOP is true. Run control uses any external monitoring system that can tell the master arduino to stop the run.
-#define ENABLE_RUN_CONTROL true
-#define ENABLE_SD_CARD true
+#define ENABLE_RUN_CONTROL false
+#define ENABLE_SD_CARD false
 // Connect a sensor using an optocoupler, connect to Z MIN. Wire G (opto) to - and V1 (opto) to S.
 #define ENABLE_YARN_BREAK_DETECTION false
 
@@ -97,12 +97,10 @@ float CURRENT_RUN_DISTANCE = 0;
 // can be picked up by a second arduino board. 
 // The extra serial ports are: Serial1 on pins 19 (RX) and 18 (TX), Serial2 on pins 17 (RX) and 16 (TX), Serial3 on pins 15 (RX) and 14 (TX)
 // To use Serial3 connect the Y MIN of board 1 to Y MAX of board 2 (connect TX of board 1 to RX of board 2, we don't need to connect the other way because 
-// board 2 doesn't talk back. Wire GND to GND, S to S and V to V. 
-// Be careful - directly wiring the serial connection will fry the voltage regulator on the receiving arduino, so you need to isolate the two using an optocoupler (the 817 will
-// do at this low baudrate). Wiring (from RAMPS endstop Y MIN to Y MAX): Ymin (+) to OPTO (Vin), Ymin (S) to OPTO (G), OPTO (Vout) to Ymax (+) OPTO (G) to Ymax (S). If powering 
-// from two different power sources then the two arduinos much share a common G (so connect the G of Ymin to the G of Ymax).
+// board 2 doesn't talk back. Wire GND to GND, S to S and DO NOT WIRE V.
+// Be careful - IF YOU WIRE V YOU WILL FRY YOUR BOARD
 int ENABLE_SERIAL_IO = 0;
-// Whether this ard
+// Whether this arduino is the main arduino
 int SERIAL_TRANSMIT = 0;
 
 ContinuousStepper<StepperDriver> motor1;
